@@ -4,9 +4,8 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,7 +42,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
-// --- RECOVERED COLOR CONSTANTS ---
+// --- COLOR CONSTANTS ---
 val BgGradientStart = Color(0xFFF7B07E)
 val BgGradientEnd = Color(0xFFFBD6B7)
 val ContainerGrey = Color(0xFFF4F5F9)
@@ -53,7 +52,6 @@ val TextTitle = Color(0xFF535353)
 val RestBlue = Color(0xFF2B92E4)
 val WorkRed = Color(0xFFE66767)
 
-// Data class to store pre-calculated day info for better performance
 data class DayDisplayInfo(
     val date: LocalDate,
     val subText: String,
@@ -65,7 +63,7 @@ data class DayDisplayInfo(
 @Composable
 fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
     val holidayMap by homeViewModel.holidays.collectAsState()
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? -> }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { }
 
     val initialMonth = YearMonth.now()
     val pageCount = 20000
@@ -79,39 +77,16 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
 
     LaunchedEffect(currentMonth) {
-        if (YearMonth.from(selectedDate ?: LocalDate.MIN) != currentMonth) {
+        if (selectedDate != null && YearMonth.from(selectedDate!!) != currentMonth) {
             selectedDate = currentMonth.atDay(1)
         }
     }
-
-    // Pre-calculate needed rows for the current month
-    val rows = remember(currentMonth) {
-        val firstDayOfWeek = currentMonth.atDay(1).dayOfWeek.value % 7
-        val neededSlots = firstDayOfWeek + currentMonth.lengthOfMonth()
-        when {
-            neededSlots <= 28 -> 4
-            neededSlots <= 35 -> 5
-            else -> 6
-        }
-    }
-    
-    val targetHeight = when(rows) {
-        4 -> 230.dp
-        5 -> 280.dp
-        else -> 330.dp
-    }
-    
-    val animatedHeight by animateDpAsState(
-        targetValue = targetHeight,
-        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
-        label = "CardHeight"
-    )
 
     Box(modifier = Modifier.fillMaxSize().background(
         brush = Brush.verticalGradient(listOf(BgGradientStart, BgGradientEnd), 0f, 1000f)
     )) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // 1. Search Bar
+            // 1. Search Bar - Scaled Down
             Row(modifier = Modifier.fillMaxWidth().padding(top = 40.dp, start = 20.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     modifier = Modifier.weight(1f).height(40.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
@@ -132,26 +107,37 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 }
             }
 
-            // 2. Quick Actions
+            // 2. Actions - Scaled Down
             Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp, start = 20.dp, end = 20.dp, bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 ActionItem(Icons.Outlined.Collections, "图片上传") { galleryLauncher.launch("image/*") }
                 ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") { }
                 ActionItem(Icons.Outlined.Groups, "群组") { }
-                ActionItem(Icons.Default.MoreVert, "更多", iconModifier = Modifier.rotate(90f)) { }
+                ActionItem(Icons.Default.MoreVert, "更多", modifier = Modifier.rotate(90f)) { }
             }
 
-            // 3. Main Calendar Card
+            // 3. Bottom Container
             Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
-                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp)) {
                     CalendarHeader(currentMonth)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(0.96f).height(animatedHeight),
-                        shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.dp
-                    ) {
-                        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.Top) { page ->
-                            val month = initialMonth.plusMonths((page - initialPage).toLong())
-                            LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
+                    
+                    // STABLE AREA: Pager manages sliding, card inside handles height animation
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxWidth().height(330.dp),
+                        verticalAlignment = Alignment.Top,
+                        beyondViewportPageCount = 1
+                    ) { page ->
+                        val month = initialMonth.plusMonths((page - initialPage).toLong())
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.96f)
+                                    .animateContentSize(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
+                                shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.dp
+                            ) {
+                                LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
+                            }
                         }
                     }
                 }
@@ -191,7 +177,7 @@ fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth, s
         }
     }
 
-    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp).fillMaxWidth().animateContentSize()) {
+    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp).fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth()) {
             listOf("日", "一", "二", "三", "四", "五", "六").forEach {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -255,10 +241,10 @@ fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (Loca
 }
 
 @Composable
-fun ActionItem(icon: ImageVector, label: String, iconModifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)) {
+fun ActionItem(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)) {
         Surface(modifier = Modifier.size(56.dp), shape = RoundedCornerShape(12.dp), color = Color.White) {
-            Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = IconColor, modifier = Modifier.size(24.dp).then(iconModifier)) }
+            Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = IconColor, modifier = Modifier.size(24.dp)) }
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(text = label, fontSize = 13.sp, color = TextTitle, fontWeight = FontWeight.Normal)

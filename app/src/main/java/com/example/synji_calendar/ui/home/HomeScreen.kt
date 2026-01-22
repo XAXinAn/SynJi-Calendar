@@ -205,7 +205,7 @@ fun LiveCalendar(
         days
     }
 
-    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp).wrapContentSize()) {
+    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp).wrapContentSize()) {
         Row(modifier = Modifier.fillMaxWidth()) {
             listOf("日", "一", "二", "三", "四", "五", "六").forEach {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -214,17 +214,22 @@ fun LiveCalendar(
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
+        
+        // Render rows dynamically, omitting rows that only contain dates from other months
         calendarDays.chunked(7).forEach { week ->
-            Row(modifier = Modifier.fillMaxWidth()) {
-                week.forEach { date ->
-                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        CalendarDay(
-                            date = date,
-                            isSelected = date == selectedDate,
-                            isCurrentMonth = YearMonth.from(date) == currentMonth,
-                            holiday = holidayMap[date],
-                            onDateSelected = onDateSelected
-                        )
+            val hasDayInCurrentMonth = week.any { YearMonth.from(it) == currentMonth }
+            if (hasDayInCurrentMonth) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    week.forEach { date ->
+                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            CalendarDay(
+                                date = date,
+                                isSelected = date == selectedDate,
+                                isCurrentMonth = YearMonth.from(date) == currentMonth,
+                                holiday = holidayMap[date],
+                                onDateSelected = onDateSelected
+                            )
+                        }
                     }
                 }
             }
@@ -251,10 +256,8 @@ fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, h
     ) {
         if (isSelected && isCurrentMonth) {
             if (isToday) {
-                // 今天且选中：蓝色圆（实心）
                 Surface(modifier = Modifier.size(46.dp), shape = CircleShape, color = CalendarSelectBlue) {}
             } else {
-                // 非今天且选中：蓝色圈（空心）
                 Surface(
                     modifier = Modifier.size(46.dp), 
                     shape = CircleShape, 
@@ -269,7 +272,7 @@ fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, h
                 isSelected && isCurrentMonth && isToday -> Color.White
                 isToday && isCurrentMonth -> CalendarSelectBlue
                 !isCurrentMonth -> Color.LightGray
-                else -> Color(0xFF333333) // 非今天且选中时，也会走这里，显示原来的颜色
+                else -> Color(0xFF333333)
             }
             
             Text(

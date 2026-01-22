@@ -1,5 +1,9 @@
 package com.example.synji_calendar.ui.home
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -48,6 +52,13 @@ val WorkRed = Color(0xFFE66767)
 fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
     val holidayMap by homeViewModel.holidays.collectAsState()
     
+    // Gallery picker launcher
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { println("Selected image URI: $it") }
+    }
+
     // Initial month setup
     val initialMonth = YearMonth.now()
     val pageCount = 20000
@@ -57,6 +68,16 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
     // Current month derived from pager state
     val currentMonth = remember(pagerState.currentPage) {
         initialMonth.plusMonths((pagerState.currentPage - initialPage).toLong())
+    }
+
+    // Lifted selectedDate state
+    var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
+
+    // Auto-select first day when swiping to a new month
+    LaunchedEffect(currentMonth) {
+        if (YearMonth.from(selectedDate ?: LocalDate.MIN) != currentMonth) {
+            selectedDate = currentMonth.atDay(1)
+        }
     }
 
     Box(
@@ -71,7 +92,6 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
             )
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // 1. Search Bar - Scaled Down
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -81,7 +101,7 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 Surface(
                     modifier = Modifier
                         .weight(1f)
-                        .height(40.dp) // Reduced height from 46 to 40
+                        .height(40.dp)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -107,18 +127,16 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 }
             }
 
-            // 2. Actions - Scaled Down
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp, start = 20.dp, end = 20.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                ActionItem(Icons.Outlined.Collections, "图片上传")
-                ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗")
-                ActionItem(Icons.Outlined.Groups, "群组")
-                ActionItem(Icons.Default.MoreHoriz, "更多")
+                ActionItem(Icons.Outlined.Collections, "图片上传") { galleryLauncher.launch("image/*") }
+                ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") { }
+                ActionItem(Icons.Outlined.Groups, "群组") { }
+                ActionItem(Icons.Default.MoreHoriz, "更多") { }
             }
 
-            // 3. Bottom Container
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = ContainerGrey,
@@ -130,21 +148,24 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 ) {
                     CalendarHeader(currentMonth)
                     Spacer(modifier = Modifier.height(8.dp))
-                    
                     Surface(
                         modifier = Modifier.wrapContentSize(),
                         shape = RoundedCornerShape(24.dp),
                         color = Color.White,
                         shadowElevation = 0.dp
                     ) {
-                        // SWIPABLE CALENDAR
                         HorizontalPager(
                             state = pagerState,
                             modifier = Modifier.wrapContentSize(),
                             verticalAlignment = Alignment.Top
                         ) { page ->
                             val month = initialMonth.plusMonths((page - initialPage).toLong())
-                            LiveCalendar(holidayMap, month)
+                            LiveCalendar(
+                                holidayMap = holidayMap,
+                                currentMonth = month,
+                                selectedDate = selectedDate,
+                                onDateSelected = { selectedDate = it }
+                            )
                         }
                     }
                 }
@@ -166,9 +187,12 @@ fun CalendarHeader(currentMonth: YearMonth) {
 }
 
 @Composable
-fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth) {
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
-    
+fun LiveCalendar(
+    holidayMap: Map<LocalDate, Holiday>,
+    currentMonth: YearMonth,
+    selectedDate: LocalDate?,
+    onDateSelected: (LocalDate) -> Unit
+) {
     val calendarDays = remember(currentMonth) {
         val days = mutableListOf<LocalDate>()
         val firstOfMonth = currentMonth.atDay(1)
@@ -181,7 +205,7 @@ fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth) {
         days
     }
 
-    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp).wrapContentSize()) {
+    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp).wrapContentSize()) {
         Row(modifier = Modifier.fillMaxWidth()) {
             listOf("日", "一", "二", "三", "四", "五", "六").forEach {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -194,7 +218,13 @@ fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 week.forEach { date ->
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        CalendarDay(date, date == selectedDate, YearMonth.from(date) == currentMonth, holidayMap[date]) { selectedDate = it }
+                        CalendarDay(
+                            date = date,
+                            isSelected = date == selectedDate,
+                            isCurrentMonth = YearMonth.from(date) == currentMonth,
+                            holiday = holidayMap[date],
+                            onDateSelected = onDateSelected
+                        )
                     }
                 }
             }
@@ -219,21 +249,41 @@ fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, h
         contentAlignment = Alignment.Center,
         modifier = Modifier.size(46.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = isCurrentMonth) { onDateSelected(date) }
     ) {
-        if (isSelected && isCurrentMonth) Surface(modifier = Modifier.size(46.dp), shape = CircleShape, color = CalendarSelectBlue) {}
+        if (isSelected && isCurrentMonth) {
+            if (isToday) {
+                // 今天且选中：蓝色圆（实心）
+                Surface(modifier = Modifier.size(46.dp), shape = CircleShape, color = CalendarSelectBlue) {}
+            } else {
+                // 非今天且选中：蓝色圈（空心）
+                Surface(
+                    modifier = Modifier.size(46.dp), 
+                    shape = CircleShape, 
+                    color = Color.Transparent,
+                    border = BorderStroke(1.5.dp, CalendarSelectBlue)
+                ) {}
+            }
+        }
         
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Top) {
+            val textColor = when {
+                isSelected && isCurrentMonth && isToday -> Color.White
+                isToday && isCurrentMonth -> CalendarSelectBlue
+                !isCurrentMonth -> Color.LightGray
+                else -> Color(0xFF333333) // 非今天且选中时，也会走这里，显示原来的颜色
+            }
+            
             Text(
                 text = date.dayOfMonth.toString(),
                 fontSize = 17.sp, 
                 fontWeight = FontWeight.Normal, 
                 lineHeight = 16.sp,
                 style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
-                color = when { isSelected && isCurrentMonth -> Color.White; isToday && isCurrentMonth -> CalendarSelectBlue; !isCurrentMonth -> Color.LightGray; else -> Color(0xFF333333) }
+                color = textColor
             )
             Text(
                 text = subText, fontSize = 10.sp, maxLines = 1, lineHeight = 10.sp,
                 style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
-                color = when { isSelected && isCurrentMonth -> Color.White; isToday && isCurrentMonth -> CalendarSelectBlue; !isCurrentMonth -> Color.LightGray; else -> Color(0xFF999999) }
+                color = if (textColor == Color.White) Color.White else Color(0xFF999999).let { if (isToday && !isSelected) CalendarSelectBlue else it }
             )
         }
         if (isCurrentMonth && holiday != null) {
@@ -241,7 +291,7 @@ fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, h
                 text = if (holiday.isRest) "休" else "班",
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isSelected) Color.White else (if (holiday.isRest) RestBlue else WorkRed),
+                color = if (isSelected && isToday) Color.White else (if (holiday.isRest) RestBlue else WorkRed),
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp)
             )
         }
@@ -249,37 +299,14 @@ fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, h
 }
 
 @Composable
-fun ActionItem(icon: ImageVector, label: String) {
+fun ActionItem(icon: ImageVector, label: String, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
-    
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(
-            interactionSource = interactionSource,
-            indication = null
-        ) { /* TODO: Navigate to feature */ }
-    ) {
-        Surface(
-            modifier = Modifier.size(56.dp), // Reduced from 68
-            shape = RoundedCornerShape(12.dp),
-            color = Color.White
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = IconColor,
-                    modifier = Modifier.size(24.dp) // Reduced from 32
-                )
-            }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)) {
+        Surface(modifier = Modifier.size(56.dp), shape = RoundedCornerShape(12.dp), color = Color.White) {
+            Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = IconColor, modifier = Modifier.size(24.dp)) }
         }
-        Spacer(modifier = Modifier.height(4.dp)) // Reduced from 8
-        Text(
-            text = label,
-            fontSize = 13.sp, // Reduced from 15
-            color = TextTitle,
-            fontWeight = FontWeight.Normal
-        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = label, fontSize = 13.sp, color = TextTitle, fontWeight = FontWeight.Normal)
     }
 }
 

@@ -52,6 +52,7 @@ val TextTitle = Color(0xFF535353)
 val RestBlue = Color(0xFF2B92E4)
 val WorkRed = Color(0xFFE66767)
 
+// Pre-calculated day info for performance
 data class DayDisplayInfo(
     val date: LocalDate,
     val subText: String,
@@ -107,12 +108,12 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 }
             }
 
-            // 2. Actions - Scaled Down
+            // 2. Quick Actions - Scaled Down
             Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp, start = 20.dp, end = 20.dp, bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 ActionItem(Icons.Outlined.Collections, "图片上传") { galleryLauncher.launch("image/*") }
                 ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") { }
                 ActionItem(Icons.Outlined.Groups, "群组") { }
-                ActionItem(Icons.Default.MoreVert, "更多", modifier = Modifier.rotate(90f)) { }
+                ActionItem(Icons.Default.MoreVert, "更多") { }
             }
 
             // 3. Bottom Container
@@ -121,19 +122,19 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                     CalendarHeader(currentMonth)
                     Spacer(modifier = Modifier.height(8.dp))
                     
-                    // STABLE AREA: Pager manages sliding, card inside handles height animation
+                    // Fixed Height Swiping Area with content-based height animation
                     HorizontalPager(
                         state = pagerState,
-                        modifier = Modifier.fillMaxWidth().height(330.dp),
+                        modifier = Modifier.fillMaxWidth().wrapContentHeight().animateContentSize(
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)
+                        ),
                         verticalAlignment = Alignment.Top,
                         beyondViewportPageCount = 1
                     ) { page ->
                         val month = initialMonth.plusMonths((page - initialPage).toLong())
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                             Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth(0.96f)
-                                    .animateContentSize(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
+                                modifier = Modifier.fillMaxWidth(0.96f).wrapContentHeight(),
                                 shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.dp
                             ) {
                                 LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
@@ -234,7 +235,7 @@ fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (Loca
             Text(
                 text = if (info.holiday.isRest) "休" else "班", fontSize = 9.sp, fontWeight = FontWeight.Bold,
                 color = if (isSelected && info.isToday) Color.White else (if (info.holiday.isRest) RestBlue else WorkRed),
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp)
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp)
             )
         }
     }
@@ -242,7 +243,8 @@ fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (Loca
 
 @Composable
 fun ActionItem(icon: ImageVector, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)) {
         Surface(modifier = Modifier.size(56.dp), shape = RoundedCornerShape(12.dp), color = Color.White) {
             Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = IconColor, modifier = Modifier.size(24.dp)) }
         }

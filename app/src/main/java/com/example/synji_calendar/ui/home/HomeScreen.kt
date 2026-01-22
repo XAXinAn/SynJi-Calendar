@@ -4,6 +4,9 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,7 +43,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
-// Color constants
+// --- RECOVERED COLOR CONSTANTS ---
 val BgGradientStart = Color(0xFFF7B07E)
 val BgGradientEnd = Color(0xFFFBD6B7)
 val ContainerGrey = Color(0xFFF4F5F9)
@@ -50,13 +53,19 @@ val TextTitle = Color(0xFF535353)
 val RestBlue = Color(0xFF2B92E4)
 val WorkRed = Color(0xFFE66767)
 
+// Data class to store pre-calculated day info for better performance
+data class DayDisplayInfo(
+    val date: LocalDate,
+    val subText: String,
+    val isToday: Boolean,
+    val isCurrentMonth: Boolean,
+    val holiday: Holiday?
+)
+
 @Composable
 fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
     val holidayMap by homeViewModel.holidays.collectAsState()
-    
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> uri?.let { println("Selected image URI: $it") } }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? -> }
 
     val initialMonth = YearMonth.now()
     val pageCount = 20000
@@ -75,38 +84,40 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(BgGradientStart, BgGradientEnd),
-                    startY = 0f,
-                    endY = 1000f
-                )
-            )
-    ) {
-        // Main column with animation for smooth layout transitions
-        Column(modifier = Modifier.fillMaxSize().animateContentSize()) {
-            // 1. Search Bar - Scaled Down
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 40.dp, start = 20.dp, end = 20.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+    // Pre-calculate needed rows for the current month
+    val rows = remember(currentMonth) {
+        val firstDayOfWeek = currentMonth.atDay(1).dayOfWeek.value % 7
+        val neededSlots = firstDayOfWeek + currentMonth.lengthOfMonth()
+        when {
+            neededSlots <= 28 -> 4
+            neededSlots <= 35 -> 5
+            else -> 6
+        }
+    }
+    
+    val targetHeight = when(rows) {
+        4 -> 230.dp
+        5 -> 280.dp
+        else -> 330.dp
+    }
+    
+    val animatedHeight by animateDpAsState(
+        targetValue = targetHeight,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "CardHeight"
+    )
+
+    Box(modifier = Modifier.fillMaxSize().background(
+        brush = Brush.verticalGradient(listOf(BgGradientStart, BgGradientEnd), 0f, 1000f)
+    )) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 1. Search Bar
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 40.dp, start = 20.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(40.dp)
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color.White
+                    modifier = Modifier.weight(1f).height(40.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
+                    shape = RoundedCornerShape(20.dp), color = Color.White
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Search, null, tint = Color(0xFF535353), modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("点击搜索日程", color = Color(0xFF535353), fontSize = 15.sp, modifier = Modifier.weight(1f))
@@ -121,48 +132,26 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 }
             }
 
-            // 2. Actions - Scaled Down
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp, start = 20.dp, end = 20.dp, bottom = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            // 2. Quick Actions
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp, start = 20.dp, end = 20.dp, bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 ActionItem(Icons.Outlined.Collections, "图片上传") { galleryLauncher.launch("image/*") }
                 ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") { }
                 ActionItem(Icons.Outlined.Groups, "群组") { }
-                // Rotated MoreVert to serve as horizontal more icon to fix reference issues
                 ActionItem(Icons.Default.MoreVert, "更多", iconModifier = Modifier.rotate(90f)) { }
             }
 
-            // 3. Bottom Container
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = ContainerGrey,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp).animateContentSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally 
-                ) {
+            // 3. Main Calendar Card
+            Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
+                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     CalendarHeader(currentMonth)
                     Spacer(modifier = Modifier.height(8.dp))
                     Surface(
-                        modifier = Modifier.wrapContentSize().animateContentSize(),
-                        shape = RoundedCornerShape(24.dp),
-                        color = Color.White,
-                        shadowElevation = 0.dp
+                        modifier = Modifier.fillMaxWidth(0.96f).height(animatedHeight),
+                        shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.dp
                     ) {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier.wrapContentSize(),
-                            verticalAlignment = Alignment.Top
-                        ) { page ->
+                        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.Top) { page ->
                             val month = initialMonth.plusMonths((page - initialPage).toLong())
-                            LiveCalendar(
-                                holidayMap = holidayMap,
-                                currentMonth = month,
-                                selectedDate = selectedDate,
-                                onDateSelected = { selectedDate = it }
-                            )
+                            LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
                         }
                     }
                 }
@@ -173,10 +162,7 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
 
 @Composable
 fun CalendarHeader(currentMonth: YearMonth) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Menu, null, modifier = Modifier.size(28.dp), tint = Color.Black)
         Spacer(modifier = Modifier.width(16.dp))
         Text(currentMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Black)
@@ -184,25 +170,28 @@ fun CalendarHeader(currentMonth: YearMonth) {
 }
 
 @Composable
-fun LiveCalendar(
-    holidayMap: Map<LocalDate, Holiday>,
-    currentMonth: YearMonth,
-    selectedDate: LocalDate?,
-    onDateSelected: (LocalDate) -> Unit
-) {
-    val calendarDays = remember(currentMonth) {
+fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth, selectedDate: LocalDate?, onDateSelected: (LocalDate) -> Unit) {
+    val monthData = remember(currentMonth, holidayMap) {
         val days = mutableListOf<LocalDate>()
-        val firstOfMonth = currentMonth.atDay(1)
-        val firstDayOfWeek = firstOfMonth.dayOfWeek.value % 7
+        val firstDayOfWeek = currentMonth.atDay(1).dayOfWeek.value % 7
         val prevMonth = currentMonth.minusMonths(1)
         for (i in firstDayOfWeek - 1 downTo 0) days.add(prevMonth.atDay(prevMonth.lengthOfMonth() - i))
         for (i in 1..currentMonth.lengthOfMonth()) days.add(currentMonth.atDay(i))
-        var nextMonthDay = 1
-        while (days.size < 42) days.add(currentMonth.plusMonths(1).atDay(nextMonthDay++))
-        days
+        while (days.size < 42) days.add(currentMonth.plusMonths(1).atDay(days.size - firstDayOfWeek - currentMonth.lengthOfMonth() + 1))
+        
+        days.map { date ->
+            val solar = Solar.fromYmd(date.year, date.monthValue, date.dayOfMonth)
+            val lunar = solar.lunar
+            val sf = solar.festivals; val lf = lunar.festivals; val of = lunar.otherFestivals; val jq = lunar.jieQi
+            val subText = when {
+                sf.isNotEmpty() -> sf[0]; lf.isNotEmpty() -> lf[0]; of.isNotEmpty() -> of[0]; jq.isNotEmpty() -> jq
+                lunar.day == 1 -> lunar.monthInChinese + "月"; else -> lunar.dayInChinese
+            }
+            DayDisplayInfo(date, subText, date == LocalDate.now(), YearMonth.from(date) == currentMonth, holidayMap[date])
+        }
     }
 
-    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp).wrapContentSize()) {
+    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp).fillMaxWidth().animateContentSize()) {
         Row(modifier = Modifier.fillMaxWidth()) {
             listOf("日", "一", "二", "三", "四", "五", "六").forEach {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -211,20 +200,12 @@ fun LiveCalendar(
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
-        
-        calendarDays.chunked(7).forEach { week ->
-            val hasDayInCurrentMonth = week.any { YearMonth.from(it) == currentMonth }
-            if (hasDayInCurrentMonth) {
+        monthData.chunked(7).forEach { week ->
+            if (week.any { it.isCurrentMonth }) {
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    week.forEach { date ->
+                    week.forEach { info ->
                         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            CalendarDay(
-                                date = date,
-                                isSelected = date == selectedDate,
-                                isCurrentMonth = YearMonth.from(date) == currentMonth,
-                                holiday = holidayMap[date],
-                                onDateSelected = onDateSelected
-                            )
+                            CalendarDay(info, info.date == selectedDate, onDateSelected)
                         }
                     }
                 }
@@ -234,63 +215,39 @@ fun LiveCalendar(
 }
 
 @Composable
-fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, holiday: Holiday?, onDateSelected: (LocalDate) -> Unit) {
-    val solar = remember(date) { Solar.fromYmd(date.year, date.monthValue, date.dayOfMonth) }
-    val lunar = remember(solar) { solar.lunar }
-    val isToday = remember(date) { date == LocalDate.now() }
-    val subText = remember(solar, lunar) {
-        val sf = solar.festivals; val lf = lunar.festivals; val of = lunar.otherFestivals; val jq = lunar.jieQi
-        when {
-            sf.isNotEmpty() -> sf[0]; lf.isNotEmpty() -> lf[0]; of.isNotEmpty() -> of[0]; jq.isNotEmpty() -> jq
-            lunar.day == 1 -> lunar.monthInChinese + "月"; else -> lunar.dayInChinese
-        }
-    }
-
+fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (LocalDate) -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(46.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = isCurrentMonth) { onDateSelected(date) }
+        modifier = Modifier.size(46.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = info.isCurrentMonth) { onDateSelected(info.date) }
     ) {
-        if (isSelected && isCurrentMonth) {
-            if (isToday) {
+        if (isSelected && info.isCurrentMonth) {
+            if (info.isToday) {
                 Surface(modifier = Modifier.size(46.dp), shape = CircleShape, color = CalendarSelectBlue) {}
             } else {
-                Surface(
-                    modifier = Modifier.size(46.dp), 
-                    shape = CircleShape, 
-                    color = Color.Transparent,
-                    border = BorderStroke(1.5.dp, CalendarSelectBlue)
-                ) {}
+                Surface(modifier = Modifier.size(46.dp), shape = CircleShape, color = Color.Transparent, border = BorderStroke(1.5.dp, CalendarSelectBlue)) {}
             }
         }
-        
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Top) {
             val textColor = when {
-                isSelected && isCurrentMonth && isToday -> Color.White
-                isToday && isCurrentMonth -> CalendarSelectBlue
-                !isCurrentMonth -> Color.LightGray
+                isSelected && info.isCurrentMonth && info.isToday -> Color.White
+                info.isToday && info.isCurrentMonth -> CalendarSelectBlue
+                !info.isCurrentMonth -> Color.LightGray
                 else -> Color(0xFF333333)
             }
-            
             Text(
-                text = date.dayOfMonth.toString(),
-                fontSize = 17.sp, 
-                fontWeight = FontWeight.Normal, 
-                lineHeight = 16.sp,
-                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
-                color = textColor
+                text = info.date.dayOfMonth.toString(), fontSize = 17.sp, fontWeight = FontWeight.Normal, lineHeight = 16.sp,
+                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)), color = textColor
             )
             Text(
-                text = subText, fontSize = 10.sp, maxLines = 1, lineHeight = 10.sp,
+                text = info.subText, fontSize = 10.sp, maxLines = 1, lineHeight = 10.sp,
                 style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
-                color = if (textColor == Color.White) Color.White else Color(0xFF999999).let { if (isToday && !isSelected) CalendarSelectBlue else it }
+                color = if (textColor == Color.White) Color.White else (if (info.isToday && !isSelected) CalendarSelectBlue else Color(0xFF999999))
             )
         }
-        if (isCurrentMonth && holiday != null) {
+        if (info.isCurrentMonth && info.holiday != null) {
             Text(
-                text = if (holiday.isRest) "休" else "班",
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isSelected && isToday) Color.White else (if (holiday.isRest) RestBlue else WorkRed),
+                text = if (info.holiday.isRest) "休" else "班", fontSize = 9.sp, fontWeight = FontWeight.Bold,
+                color = if (isSelected && info.isToday) Color.White else (if (info.holiday.isRest) RestBlue else WorkRed),
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp)
             )
         }
@@ -299,17 +256,9 @@ fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, h
 
 @Composable
 fun ActionItem(icon: ImageVector, label: String, iconModifier: Modifier = Modifier, onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)) {
         Surface(modifier = Modifier.size(56.dp), shape = RoundedCornerShape(12.dp), color = Color.White) {
-            Box(contentAlignment = Alignment.Center) { 
-                Icon(
-                    imageVector = icon, 
-                    contentDescription = label, 
-                    tint = IconColor, 
-                    modifier = Modifier.size(24.dp).then(iconModifier)
-                ) 
-            }
+            Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = IconColor, modifier = Modifier.size(24.dp).then(iconModifier)) }
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(text = label, fontSize = 13.sp, color = TextTitle, fontWeight = FontWeight.Normal)

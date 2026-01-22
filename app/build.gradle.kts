@@ -49,6 +49,15 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
+    
+    // ViewModel compose integration
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    
+    // Add lunar-java, biweekly, and okhttp
+    implementation(libs.lunar.java)
+    implementation(libs.biweekly)
+    implementation(libs.okhttp)
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

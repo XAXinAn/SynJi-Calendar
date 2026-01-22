@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.ContentPasteSearch
@@ -103,12 +104,20 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                Surface(modifier = Modifier.size(40.dp), shape = CircleShape, color = Color(0xFF2C3E50)) {
-                    Box(contentAlignment = Alignment.Center) { Text("👑", fontSize = 16.sp) }
+                // Changed background color to IconColor (0xFF535353)
+                Surface(modifier = Modifier.size(40.dp), shape = CircleShape, color = IconColor) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
             }
 
-            // 2. Quick Actions - Scaled Down
+            // 2. Actions - Scaled Down
             Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp, start = 20.dp, end = 20.dp, bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 ActionItem(Icons.Outlined.Collections, "图片上传") { galleryLauncher.launch("image/*") }
                 ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") { }
@@ -122,7 +131,7 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                     CalendarHeader(currentMonth)
                     Spacer(modifier = Modifier.height(8.dp))
                     
-                    // Fixed Height Swiping Area with content-based height animation
+                    // STABLE AREA: Pager manages sliding, card inside handles height animation
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxWidth().wrapContentHeight().animateContentSize(

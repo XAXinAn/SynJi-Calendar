@@ -3,6 +3,7 @@ package com.example.synji_calendar.ui.home
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,7 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.ContentPasteSearch
@@ -23,6 +24,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -52,28 +54,21 @@ val WorkRed = Color(0xFFE66767)
 fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
     val holidayMap by homeViewModel.holidays.collectAsState()
     
-    // Gallery picker launcher
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { println("Selected image URI: $it") }
-    }
+    ) { uri: Uri? -> uri?.let { println("Selected image URI: $it") } }
 
-    // Initial month setup
     val initialMonth = YearMonth.now()
     val pageCount = 20000
     val initialPage = pageCount / 2
     val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = initialPage)
     
-    // Current month derived from pager state
     val currentMonth = remember(pagerState.currentPage) {
         initialMonth.plusMonths((pagerState.currentPage - initialPage).toLong())
     }
 
-    // Lifted selectedDate state
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
 
-    // Auto-select first day when swiping to a new month
     LaunchedEffect(currentMonth) {
         if (YearMonth.from(selectedDate ?: LocalDate.MIN) != currentMonth) {
             selectedDate = currentMonth.atDay(1)
@@ -91,7 +86,9 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 )
             )
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        // Main column with animation for smooth layout transitions
+        Column(modifier = Modifier.fillMaxSize().animateContentSize()) {
+            // 1. Search Bar - Scaled Down
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -102,10 +99,7 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                     modifier = Modifier
                         .weight(1f)
                         .height(40.dp)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { },
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
                     shape = RoundedCornerShape(20.dp),
                     color = Color.White
                 ) {
@@ -127,6 +121,7 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 }
             }
 
+            // 2. Actions - Scaled Down
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 20.dp, start = 20.dp, end = 20.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -134,22 +129,24 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 ActionItem(Icons.Outlined.Collections, "图片上传") { galleryLauncher.launch("image/*") }
                 ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") { }
                 ActionItem(Icons.Outlined.Groups, "群组") { }
-                ActionItem(Icons.Default.MoreHoriz, "更多") { }
+                // Rotated MoreVert to serve as horizontal more icon to fix reference issues
+                ActionItem(Icons.Default.MoreVert, "更多", iconModifier = Modifier.rotate(90f)) { }
             }
 
+            // 3. Bottom Container
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = ContainerGrey,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
             ) {
                 Column(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp).animateContentSize(),
                     horizontalAlignment = Alignment.CenterHorizontally 
                 ) {
                     CalendarHeader(currentMonth)
                     Spacer(modifier = Modifier.height(8.dp))
                     Surface(
-                        modifier = Modifier.wrapContentSize(),
+                        modifier = Modifier.wrapContentSize().animateContentSize(),
                         shape = RoundedCornerShape(24.dp),
                         color = Color.White,
                         shadowElevation = 0.dp
@@ -215,7 +212,6 @@ fun LiveCalendar(
         }
         Spacer(modifier = Modifier.height(8.dp))
         
-        // Render rows dynamically, omitting rows that only contain dates from other months
         calendarDays.chunked(7).forEach { week ->
             val hasDayInCurrentMonth = week.any { YearMonth.from(it) == currentMonth }
             if (hasDayInCurrentMonth) {
@@ -302,11 +298,18 @@ fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, h
 }
 
 @Composable
-fun ActionItem(icon: ImageVector, label: String, onClick: () -> Unit) {
+fun ActionItem(icon: ImageVector, label: String, iconModifier: Modifier = Modifier, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)) {
         Surface(modifier = Modifier.size(56.dp), shape = RoundedCornerShape(12.dp), color = Color.White) {
-            Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = IconColor, modifier = Modifier.size(24.dp)) }
+            Box(contentAlignment = Alignment.Center) { 
+                Icon(
+                    imageVector = icon, 
+                    contentDescription = label, 
+                    tint = IconColor, 
+                    modifier = Modifier.size(24.dp).then(iconModifier)
+                ) 
+            }
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(text = label, fontSize = 13.sp, color = TextTitle, fontWeight = FontWeight.Normal)

@@ -71,45 +71,45 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
             )
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // 1. Search Bar
+            // 1. Search Bar - Scaled Down
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 54.dp, start = 20.dp, end = 20.dp),
+                    .padding(top = 40.dp, start = 20.dp, end = 20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
                     modifier = Modifier
                         .weight(1f)
-                        .height(46.dp)
+                        .height(40.dp) // Reduced height from 46 to 40
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { },
-                    shape = RoundedCornerShape(23.dp),
+                    shape = RoundedCornerShape(20.dp),
                     color = Color.White
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Search, null, tint = Color(0xFF535353), modifier = Modifier.size(24.dp))
+                        Icon(Icons.Default.Search, null, tint = Color(0xFF535353), modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("点击搜索日程", color = Color(0xFF535353), fontSize = 18.sp, modifier = Modifier.weight(1f))
-                        Box(modifier = Modifier.width(1.dp).height(20.dp).background(Color(0xFFEEEEEE)))
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("搜索", color = BgGradientStart, fontWeight = FontWeight.Medium, fontSize = 18.sp)
+                        Text("点击搜索日程", color = Color(0xFF535353), fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Box(modifier = Modifier.width(1.dp).height(16.dp).background(Color(0xFFEEEEEE)))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("搜索", color = BgGradientStart, fontWeight = FontWeight.Medium, fontSize = 15.sp)
                     }
                 }
-                Spacer(modifier = Modifier.width(16.dp))
-                Surface(modifier = Modifier.size(46.dp), shape = CircleShape, color = Color(0xFF2C3E50)) {
-                    Box(contentAlignment = Alignment.Center) { Text("👑", fontSize = 20.sp) }
+                Spacer(modifier = Modifier.width(12.dp))
+                Surface(modifier = Modifier.size(40.dp), shape = CircleShape, color = Color(0xFF2C3E50)) {
+                    Box(contentAlignment = Alignment.Center) { Text("👑", fontSize = 16.sp) }
                 }
             }
 
-            // 2. Actions
+            // 2. Actions - Scaled Down
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 32.dp, start = 20.dp, end = 20.dp, bottom = 24.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp, start = 20.dp, end = 20.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 ActionItem(Icons.Outlined.Collections, "图片上传")
@@ -224,7 +224,7 @@ fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, h
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Top) {
             Text(
                 text = date.dayOfMonth.toString(),
-                fontSize = 18.sp,
+                fontSize = 17.sp, 
                 fontWeight = FontWeight.Normal, 
                 lineHeight = 16.sp,
                 style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
@@ -260,8 +260,8 @@ fun ActionItem(icon: ImageVector, label: String) {
         ) { /* TODO: Navigate to feature */ }
     ) {
         Surface(
-            modifier = Modifier.size(68.dp),
-            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.size(56.dp), // Reduced from 68
+            shape = RoundedCornerShape(12.dp),
             color = Color.White
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -269,14 +269,14 @@ fun ActionItem(icon: ImageVector, label: String) {
                     imageVector = icon,
                     contentDescription = label,
                     tint = IconColor,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(24.dp) // Reduced from 32
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp)) // Reduced from 8
         Text(
             text = label,
-            fontSize = 15.sp,
+            fontSize = 13.sp, // Reduced from 15
             color = TextTitle,
             fontWeight = FontWeight.Normal
         )

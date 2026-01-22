@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,7 +47,17 @@ val WorkRed = Color(0xFFE66767)
 @Composable
 fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
     val holidayMap by homeViewModel.holidays.collectAsState()
-    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
+    
+    // Initial month setup
+    val initialMonth = YearMonth.now()
+    val pageCount = 20000
+    val initialPage = pageCount / 2
+    val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = initialPage)
+    
+    // Current month derived from pager state
+    val currentMonth = remember(pagerState.currentPage) {
+        initialMonth.plusMonths((pagerState.currentPage - initialPage).toLong())
+    }
 
     Box(
         modifier = Modifier
@@ -118,13 +130,22 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 ) {
                     CalendarHeader(currentMonth)
                     Spacer(modifier = Modifier.height(8.dp))
+                    
                     Surface(
-                        modifier = Modifier.fillMaxWidth().wrapContentHeight(),
+                        modifier = Modifier.wrapContentSize(),
                         shape = RoundedCornerShape(24.dp),
                         color = Color.White,
                         shadowElevation = 0.dp
                     ) {
-                        LiveCalendar(holidayMap, currentMonth)
+                        // SWIPABLE CALENDAR
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.wrapContentSize(),
+                            verticalAlignment = Alignment.Top
+                        ) { page ->
+                            val month = initialMonth.plusMonths((page - initialPage).toLong())
+                            LiveCalendar(holidayMap, month)
+                        }
                     }
                 }
             }
@@ -146,7 +167,8 @@ fun CalendarHeader(currentMonth: YearMonth) {
 
 @Composable
 fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth) {
-    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    
     val calendarDays = remember(currentMonth) {
         val days = mutableListOf<LocalDate>()
         val firstOfMonth = currentMonth.atDay(1)
@@ -159,8 +181,7 @@ fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth) {
         days
     }
 
-    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp).fillMaxWidth()) {
-        // Week Headers with weights for perfect alignment
+    Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp).wrapContentSize()) {
         Row(modifier = Modifier.fillMaxWidth()) {
             listOf("日", "一", "二", "三", "四", "五", "六").forEach {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -169,7 +190,6 @@ fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth) {
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
-        // Day rows with weights for perfect alignment
         calendarDays.chunked(7).forEach { week ->
             Row(modifier = Modifier.fillMaxWidth()) {
                 week.forEach { date ->
@@ -204,7 +224,7 @@ fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, h
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Top) {
             Text(
                 text = date.dayOfMonth.toString(),
-                fontSize = 18.sp, // 回归 18.sp
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Normal, 
                 lineHeight = 16.sp,
                 style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
@@ -230,11 +250,36 @@ fun CalendarDay(date: LocalDate, isSelected: Boolean, isCurrentMonth: Boolean, h
 
 @Composable
 fun ActionItem(icon: ImageVector, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }) {
-        Surface(modifier = Modifier.size(68.dp), shape = RoundedCornerShape(14.dp), color = Color.White) {
-            Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = IconColor, modifier = Modifier.size(32.dp)) }
+    val interactionSource = remember { MutableInteractionSource() }
+    
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(
+            interactionSource = interactionSource,
+            indication = null
+        ) { /* TODO: Navigate to feature */ }
+    ) {
+        Surface(
+            modifier = Modifier.size(68.dp),
+            shape = RoundedCornerShape(14.dp),
+            color = Color.White
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = IconColor,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
         }
-        Spacer(modifier = Modifier.height(8.dp)); Text(label, fontSize = 15.sp, color = TextTitle)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = label,
+            fontSize = 15.sp,
+            color = TextTitle,
+            fontWeight = FontWeight.Normal
+        )
     }
 }
 

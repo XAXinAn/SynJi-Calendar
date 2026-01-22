@@ -22,7 +22,7 @@ data class Holiday(
 
 object HolidayService {
     private const val TAG = "HolidayService"
-    private const val CACHE_FILE_NAME = "holidays_cache.ics"
+    private const val CACHE_FILE_NAME = "holidays_cache_v2.ics"
     
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -31,89 +31,82 @@ object HolidayService {
 
     private var holidayMap: Map<LocalDate, Holiday> = emptyMap()
 
-    /**
-     * 获取节假日数据：优先内存 -> 其次磁盘 -> 最后网络
-     */
     suspend fun fetchHolidays(context: Context): Map<LocalDate, Holiday> {
-        // 1. 内存缓存
         if (holidayMap.isNotEmpty()) return holidayMap
         
         return withContext(Dispatchers.IO) {
-            // 2. 尝试从本地磁盘读取
+            // 1. 尝试加载缓存
             val cacheFile = File(context.filesDir, CACHE_FILE_NAME)
             if (cacheFile.exists()) {
-                Log.d(TAG, "Loading from disk cache...")
-                val cachedIcs = cacheFile.readText()
-                holidayMap = parseIcsString(cachedIcs)
-                
-                // 如果磁盘有数据，直接返回展示，但后台依然静默更新一下网络数据
-                if (holidayMap.isNotEmpty()) {
-                    Log.i(TAG, "Disk cache loaded successfully: ${holidayMap.size} items")
-                    // 启动异步静默更新（不阻塞当前返回）
-                    updateCacheInBackground(context)
+                val cached = parseIcsString(cacheFile.readText())
+                if (cached.isNotEmpty()) {
+                    holidayMap = cached
+                    Log.i(TAG, "Loaded ${cached.size} items from cache")
                     return@withContext holidayMap
                 }
             }
 
-            // 3. 磁盘没数据，必须从网络获取
-            return@withContext downloadAndCache(context)
+            // 2. 联网下载
+            val networkMap = downloadAndCache(context)
+            
+            // 3. 如果联网也失败，内置部分 2025 数据供测试 UI
+            if (networkMap.isEmpty()) {
+                Log.w(TAG, "Network failed, using internal test data")
+                val testData = mutableMapOf<LocalDate, Holiday>()
+                // 2025 元旦
+                testData[LocalDate.of(2025, 1, 1)] = Holiday(LocalDate.of(2025, 1, 1), false, true, "元旦")
+                // 2025 春节调休示例
+                testData[LocalDate.of(2025, 1, 26)] = Holiday(LocalDate.of(2025, 1, 26), true, false, "春节")
+                testData[LocalDate.of(2025, 1, 28)] = Holiday(LocalDate.of(2025, 1, 28), false, true, "春节")
+                holidayMap = testData
+            } else {
+                holidayMap = networkMap
+            }
+            
+            return@withContext holidayMap
         }
     }
 
-    private suspend fun downloadAndCache(context: Context): Map<LocalDate, Holiday> {
-        try {
-            Log.d(TAG, "Fetching from network...")
-            val request = Request.Builder()
-                .url("https://cdn.jsdelivr.net/npm/chinese-days/dist/holidays.ics")
-                .build()
-            
+    private fun downloadAndCache(context: Context): Map<LocalDate, Holiday> {
+        return try {
+            val request = Request.Builder().url("https://cdn.jsdelivr.net/npm/chinese-days/dist/holidays.ics").build()
             val response = client.newCall(request).execute()
             if (response.isSuccessful) {
                 val icalString = response.body?.string() ?: ""
-                // 保存到磁盘
                 File(context.filesDir, CACHE_FILE_NAME).writeText(icalString)
-                holidayMap = parseIcsString(icalString)
-                Log.i(TAG, "Network download successful and cached")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Network fetch failed", e)
-        }
-        return holidayMap
-    }
-
-    private fun updateCacheInBackground(context: Context) {
-        // 实际项目中可以这里启动协程更新，目前简单起见可暂不处理，
-        // 或者在下一次启动时自然会更新。
+                parseIcsString(icalString)
+            } else emptyMap()
+        } catch (e: Exception) { emptyMap() }
     }
 
     private fun parseIcsString(icalString: String): Map<LocalDate, Holiday> {
         val map = mutableMapOf<LocalDate, Holiday>()
         try {
+            // 使用 .all() 获取 List 再取第一个，解决 firstOrNull 编译错误
             val icals = Biweekly.parse(icalString).all()
             if (icals.isEmpty()) return map
-            
             val ical = icals[0]
+            
             val systemZone = ZoneId.systemDefault()
-
             ical.getComponents(VEvent::class.java).forEach { event ->
                 val summary = event.summary?.value ?: ""
                 val isRest = summary.contains("休")
                 val isWork = summary.contains("班")
-
                 if (isRest || isWork) {
-                    val name = summary.replace(Regex("[\\(（].*?[\\)）]"), "").trim()
+                    val name = summary.replace(Regex("[\\(（\\[].*?[\\)）\\]]"), "").trim()
                     val startDate = event.dateStart?.value?.toInstant()?.atZone(systemZone)?.toLocalDate() ?: return@forEach
                     val endDate = event.dateEnd?.value?.toInstant()?.atZone(systemZone)?.toLocalDate() ?: startDate.plusDays(1)
-
-                    var current = startDate
-                    while (current.isBefore(endDate)) {
-                        map[current] = Holiday(current, isWork, isRest, name)
-                        current = current.plusDays(1)
+                    
+                    var curr = startDate
+                    // 修复变量名错误: curr.isBefore
+                    while (curr.isBefore(endDate)) {
+                        map[curr] = Holiday(curr, isWork, isRest, name)
+                        curr = curr.plusDays(1)
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Parse error", e)
+            Log.e(TAG, "Parse error: ${e.message}")
         }
         return map
     }

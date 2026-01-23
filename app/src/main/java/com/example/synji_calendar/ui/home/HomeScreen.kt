@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
@@ -185,62 +186,68 @@ fun HomeScreen(
 
             // 3. Bottom Container
             Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // --- FIXED YEAR/MONTH HEADER ---
                     Spacer(modifier = Modifier.height(20.dp))
-                    CalendarHeader(displayMonth, onAddClick = { onAddSchedule(selectedDate ?: LocalDate.now()) })
+                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                        CalendarHeader(displayMonth, onAddClick = { onAddSchedule(selectedDate ?: LocalDate.now()) })
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    val config = LocalConfiguration.current
-                    val contentWidth = config.screenWidthDp.dp - 32.dp
-                    val daySize = (contentWidth - 24.dp) / 7
-                    val dynamicCalendarHeight = (daySize * interpolatedRowCount.toFloat().coerceAtLeast(1f)) + 20.dp + 32.dp + 12.dp
-
-                    Box(
+                    // --- SCROLLABLE AREA ---
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(dynamicCalendarHeight)
+                            .weight(1f)
+                            .padding(horizontal = 16.dp)
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier.fillMaxSize(),
-                            verticalAlignment = Alignment.Top,
-                            beyondViewportPageCount = 1,
-                            pageSpacing = 16.dp
-                        ) { page ->
-                            val month = initialMonth.plusMonths((page - initialPage).toLong())
-                            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                            
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .graphicsLayer {
-                                        val scale = 1f - (abs(pageOffset) * 0.04f)
-                                        scaleX = scale
-                                        scaleY = scale
-                                        alpha = 1f - (abs(pageOffset) * 0.4f)
-                                    }, 
-                                contentAlignment = Alignment.TopCenter
-                            ) {
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth().wrapContentHeight(),
-                                    shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.5.dp
+                        val config = LocalConfiguration.current
+                        val contentWidth = config.screenWidthDp.dp - 32.dp
+                        val daySize = (contentWidth - 24.dp) / 7
+                        val dynamicCalendarHeight = (daySize * interpolatedRowCount.toFloat().coerceAtLeast(1f)) + 20.dp + 32.dp + 12.dp
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(dynamicCalendarHeight)
+                        ) {
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier.fillMaxSize(),
+                                verticalAlignment = Alignment.Top,
+                                beyondViewportPageCount = 1,
+                                pageSpacing = 16.dp
+                            ) { page ->
+                                val month = initialMonth.plusMonths((page - initialPage).toLong())
+                                val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .graphicsLayer {
+                                            val scale = 1f - (abs(pageOffset) * 0.04f)
+                                            scaleX = scale
+                                            scaleY = scale
+                                            alpha = 1f - (abs(pageOffset) * 0.4f)
+                                        }, 
+                                    contentAlignment = Alignment.TopCenter
                                 ) {
-                                    LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth().wrapContentHeight(),
+                                        shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.5.dp
+                                    ) {
+                                        LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    selectedDate?.let { date ->
-                        ScheduleSection(date, homeViewModel)
+                        selectedDate?.let { date ->
+                            ScheduleSection(date, homeViewModel)
+                        }
+                        
+                        Spacer(modifier = Modifier.height(80.dp))
                     }
-                    
-                    Spacer(modifier = Modifier.height(80.dp))
                 }
             }
         }
@@ -464,76 +471,110 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel) {
 
 @Composable
 fun ScheduleCard(item: Schedule) {
-    Row(
+    // 竖线颜色：重要用红色，普通用深灰色 0xFF535353
+    val accentColor = if (item.isImportant) WorkRed else Color(0xFF535353)
+    
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .padding(vertical = 4.dp), 
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 2.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White,
+        shadowElevation = 0.5.dp
     ) {
-        // Time and Warning Icon
-        Column(modifier = Modifier.width(60.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = if (item.isAllDay) "全天" else item.time.format(DateTimeFormatter.ofPattern("HH:mm")), 
-                fontSize = if (item.isAllDay) 15.sp else 16.sp, 
-                fontWeight = FontWeight.Bold, 
-                color = Color.Black
-            )
-            if (item.isImportant) {
-                Icon(
-                    Icons.Default.Error, 
-                    null, 
-                    tint = WorkRed, 
-                    modifier = Modifier.size(18.dp).padding(top = 4.dp)
-                )
-            }
-        }
-        
-        // Vertical line - Fixed color to 0xFF535353
-        Box(
+        Row(
             modifier = Modifier
-                .width(2.5.dp)
-                .fillMaxHeight()
-                .background(Color(0xFF535353), CircleShape)
-        )
-        
-        // Main content
-        Column(modifier = Modifier.padding(start = 20.dp).weight(1f)) {
-            // 1. Top info: Source only
-            Text(
-                text = "来源: ${item.belonging}", 
-                fontSize = 12.sp, 
-                color = Color.Gray.copy(alpha = 0.8f)
-            )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            // 2. Title
-            Text(
-                text = item.title, 
-                fontSize = 18.sp, 
-                fontWeight = FontWeight.Bold, 
-                color = Color.Black
-            )
-            
-            // 3. Location (Below title)
-            if (item.location.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                .padding(16.dp)
+                .height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 左侧：时间区
+            Column(
+                modifier = Modifier.width(60.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = if (item.isAllDay) "全天" else item.time.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (item.isAllDay) CalendarSelectBlue else Color.Black
+                )
+                if (item.isImportant) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Icon(
-                        imageVector = Icons.Default.LocationOn, 
-                        contentDescription = null, 
-                        tint = Color.Gray, 
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = item.location,
-                        fontSize = 13.sp,
-                        color = Color.Gray
+                        imageVector = Icons.Default.Error,
+                        contentDescription = null,
+                        tint = WorkRed,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // 中间：全长线条 (颜色 0xFF535353 或 WorkRed)
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .fillMaxHeight()
+                    .background(accentColor, CircleShape)
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // 右侧：内容区
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                // 来源
+                Text(
+                    text = "来自 ${item.belonging}",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Gray.copy(alpha = 0.7f),
+                    letterSpacing = 0.5.sp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 标题
+                Text(
+                    text = item.title,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    lineHeight = 22.sp
+                )
+
+                // 地点
+                if (item.location.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = Color.LightGray,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = item.location,
+                            fontSize = 13.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+            }
+            
+            // 右端引导图标 - 使用通用的 KeyboardArrowRight 避免编译错误
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowRight,
+                contentDescription = null,
+                tint = Color.LightGray.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }

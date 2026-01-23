@@ -9,8 +9,11 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -41,6 +44,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -78,6 +82,7 @@ data class ScheduleItem(
     val hasWarning: Boolean = false
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
     val holidayMap by homeViewModel.holidays.collectAsState()
@@ -89,23 +94,58 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
     val initialPage = pageCount / 2
     val pagerState = rememberPagerState(pageCount = { pageCount }, initialPage = initialPage)
     
-    val currentMonth = remember(pagerState.currentPage) {
+    val displayMonth = remember(pagerState.currentPage) {
         initialMonth.plusMonths((pagerState.currentPage - initialPage).toLong())
     }
 
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
+    var showWheelPicker by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
 
-    LaunchedEffect(currentMonth) {
-        if (selectedDate != null && YearMonth.from(selectedDate!!) != currentMonth) {
-            selectedDate = if (currentMonth == YearMonth.now()) LocalDate.now() else currentMonth.atDay(1)
+    // 底部弹出滚轮选择器
+    if (showWheelPicker) {
+        ModalBottomSheet(
+            onDismissRequest = { showWheelPicker = false },
+            sheetState = sheetState,
+            containerColor = Color.White,
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+            dragHandle = null
+        ) {
+            WheelDatePickerContent(
+                initialDate = selectedDate ?: LocalDate.now(),
+                onConfirm = { date ->
+                    selectedDate = date
+                    val targetPage = initialPage + ChronoUnit.MONTHS.between(initialMonth, YearMonth.from(date)).toInt()
+                    scope.launch { 
+                        pagerState.animateScrollToPage(targetPage)
+                    }
+                    showWheelPicker = false
+                },
+                onCancel = { showWheelPicker = false }
+            )
         }
     }
 
-    // --- 关键逻辑：计算当前月份需要的行数 ---
-    val rowCount = remember(currentMonth) {
-        val firstDayOfWeek = currentMonth.atDay(1).dayOfWeek.value % 7 // 0=Sun, 1=Mon...
-        val totalDays = currentMonth.lengthOfMonth()
-        (firstDayOfWeek + totalDays + 6) / 7
+    // 同步高度逻辑
+    fun getRowCount(month: YearMonth): Int {
+        val firstDayOfWeek = month.atDay(1).dayOfWeek.value % 7
+        val totalDays = month.lengthOfMonth()
+        return (firstDayOfWeek + totalDays + 6) / 7
+    }
+
+    val interpolatedRowCount = remember(pagerState.currentPage, pagerState.currentPageOffsetFraction) {
+        val currentRows = getRowCount(displayMonth)
+        val offset = pagerState.currentPageOffsetFraction
+        val nextMonth = if (offset > 0) displayMonth.plusMonths(1) else displayMonth.minusMonths(1)
+        val nextRows = getRowCount(nextMonth)
+        currentRows + (nextRows - currentRows) * abs(offset)
+    }
+
+    LaunchedEffect(pagerState.settledPage) {
+        val settledMonth = initialMonth.plusMonths((pagerState.settledPage - initialPage).toLong())
+        if (selectedDate == null || YearMonth.from(selectedDate!!) != settledMonth) {
+            selectedDate = if (settledMonth == YearMonth.now()) LocalDate.now() else settledMonth.atDay(1)
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -152,23 +192,20 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                         .fillMaxSize()
                         .padding(horizontal = 16.dp)
                         .verticalScroll(rememberScrollState())
-                        .animateContentSize(spring(stiffness = Spring.StiffnessMediumLow))
                 ) {
                     Spacer(modifier = Modifier.height(20.dp))
-                    CalendarHeader(currentMonth)
+                    CalendarHeader(displayMonth)
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    // --- 动态高度日历容器 ---
-                    // 计算每一行的大致高度 (基于屏幕宽度 - 边距)
                     val config = LocalConfiguration.current
-                    val daySize = (config.screenWidthDp.dp - 32.dp - 24.dp) / 7
-                    val animatedCalendarHeight = (daySize * rowCount) + 32.dp + 28.dp // 32dp是padding, 28dp是星期Header和间距
+                    val contentWidth = config.screenWidthDp.dp - 32.dp
+                    val daySize = (contentWidth - 24.dp) / 7
+                    val dynamicCalendarHeight = (daySize * interpolatedRowCount.toFloat().coerceAtLeast(1f)) + 20.dp + 32.dp + 12.dp
 
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(animatedCalendarHeight) // 强制容器高度随行数变化
-                            .animateContentSize()
+                            .height(dynamicCalendarHeight)
                     ) {
                         HorizontalPager(
                             state = pagerState,
@@ -201,7 +238,6 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                         }
                     }
 
-                    // 日程部分：减小顶部间距，紧跟日历
                     selectedDate?.let { date ->
                         ScheduleSection(date)
                     }
@@ -213,12 +249,161 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
 
         // Floating Buttons
         Column(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            FloatingActionButton(onClick = { }, containerColor = Color.White, contentColor = IconColor, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(56.dp)) { Icon(Icons.Default.CalendarMonth, null) }
             FloatingActionButton(
-                onClick = { scope.launch { pagerState.animateScrollToPage(initialPage); selectedDate = LocalDate.now() } },
-                containerColor = Color.White, contentColor = CalendarSelectBlue, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(56.dp)
+                onClick = { showWheelPicker = true },
+                containerColor = Color.White, 
+                contentColor = IconColor, 
+                shape = RoundedCornerShape(18.dp), 
+                modifier = Modifier.size(56.dp)
+            ) { Icon(Icons.Default.CalendarMonth, null) }
+            
+            FloatingActionButton(
+                onClick = { 
+                    scope.launch { 
+                        pagerState.animateScrollToPage(initialPage)
+                        selectedDate = LocalDate.now()
+                    } 
+                },
+                containerColor = Color.White, 
+                contentColor = CalendarSelectBlue, 
+                shape = RoundedCornerShape(18.dp), 
+                modifier = Modifier.size(56.dp)
             ) {
                 Text("今", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+// --- 底部弹出滚轮选择器内容 ---
+@Composable
+fun WheelDatePickerContent(
+    initialDate: LocalDate,
+    onConfirm: (LocalDate) -> Unit,
+    onCancel: () -> Unit
+) {
+    var selectedYear by remember { mutableIntStateOf(initialDate.year) }
+    var selectedMonth by remember { mutableIntStateOf(initialDate.monthValue) }
+    var selectedDay by remember { mutableIntStateOf(initialDate.dayOfMonth) }
+
+    val daysInMonth = YearMonth.of(selectedYear, selectedMonth).lengthOfMonth()
+    LaunchedEffect(selectedYear, selectedMonth) {
+        if (selectedDay > daysInMonth) selectedDay = daysInMonth
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 32.dp, start = 24.dp, end = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onCancel) { Text("取消", color = Color.Gray, fontSize = 16.sp) }
+            Text("选择日期", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            TextButton(onClick = { onConfirm(LocalDate.of(selectedYear, selectedMonth, selectedDay)) }) {
+                Text("确定", color = CalendarSelectBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Row(
+            modifier = Modifier.fillMaxWidth().height(220.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            WheelPicker(
+                items = (1970..2100).toList(),
+                initialItem = selectedYear,
+                onItemSelected = { selectedYear = it },
+                modifier = Modifier.weight(1.2f),
+                label = "年"
+            )
+            WheelPicker(
+                items = (1..12).toList(),
+                initialItem = selectedMonth,
+                onItemSelected = { selectedMonth = it },
+                modifier = Modifier.weight(1f),
+                label = "月"
+            )
+            WheelPicker(
+                items = (1..daysInMonth).toList(),
+                initialItem = selectedDay,
+                onItemSelected = { selectedDay = it },
+                modifier = Modifier.weight(1f),
+                label = "日"
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> WheelPicker(
+    items: List<T>,
+    initialItem: T,
+    onItemSelected: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    label: String = ""
+) {
+    val itemHeight = 44.dp
+    val visibleItems = 5
+    val startIndex = items.indexOf(initialItem).coerceAtLeast(0)
+    val state = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
+    val flingBehavior = rememberSnapFlingBehavior(lazyListState = state)
+
+    LaunchedEffect(state.isScrollInProgress) {
+        if (!state.isScrollInProgress) {
+            val centerIndex = state.firstVisibleItemIndex
+            if (centerIndex in items.indices) {
+                onItemSelected(items[centerIndex])
+            }
+        }
+    }
+
+    Box(modifier = modifier.height(itemHeight * visibleItems), contentAlignment = Alignment.Center) {
+        HorizontalDivider(modifier = Modifier.offset(y = -itemHeight/2).fillMaxWidth(0.85f), thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.3f))
+        HorizontalDivider(modifier = Modifier.offset(y = itemHeight/2).fillMaxWidth(0.85f), thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.3f))
+
+        // 固定单位标签：始终静止在中心
+        if (label.isNotEmpty()) {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = label,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Black,
+                    modifier = Modifier.offset(x = if(label == "年") 48.dp else 28.dp)
+                )
+            }
+        }
+
+        LazyColumn(
+            state = state,
+            flingBehavior = flingBehavior,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = itemHeight * 2)
+        ) {
+            items(items.size) { index ->
+                val item = items[index]
+                val isSelected = remember { derivedStateOf { state.firstVisibleItemIndex == index } }
+                
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(itemHeight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = item.toString(),
+                        fontSize = if (isSelected.value) 22.sp else 18.sp,
+                        fontWeight = if (isSelected.value) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected.value) Color.Black else Color.LightGray.copy(alpha = 0.8f),
+                        modifier = Modifier.offset(x = if(label.isNotEmpty()) (-12).dp else 0.dp)
+                    )
+                }
             }
         }
     }
@@ -337,7 +522,7 @@ fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth, s
     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp).fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth()) {
             listOf("日", "一", "二", "三", "四", "五", "六").forEach {
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.weight(1f).height(20.dp), contentAlignment = Alignment.Center) {
                     Text(it, fontSize = 12.sp, color = Color(0xFF999999), fontWeight = FontWeight.Medium)
                 }
             }
@@ -365,9 +550,9 @@ fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (Loca
     ) {
         if (isSelected && info.isCurrentMonth) {
             if (info.isToday) {
-                Surface(modifier = Modifier.fillMaxSize(0.85f), shape = CircleShape, color = CalendarSelectBlue) {}
+                Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = CalendarSelectBlue) {}
             } else {
-                Surface(modifier = Modifier.fillMaxSize(0.85f), shape = CircleShape, border = BorderStroke(1.5.dp, CalendarSelectBlue), color = Color.Transparent) {}
+                Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, border = BorderStroke(1.5.dp, CalendarSelectBlue), color = Color.Transparent) {}
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -378,8 +563,12 @@ fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (Loca
                 else -> Color(0xFF333333)
             }
             Text(
-                text = info.date.dayOfMonth.toString(), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp,
-                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)), color = textColor
+                text = info.date.dayOfMonth.toString(), 
+                fontSize = 18.sp, 
+                fontWeight = FontWeight.Normal,
+                lineHeight = 18.sp,
+                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)), 
+                color = textColor
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(

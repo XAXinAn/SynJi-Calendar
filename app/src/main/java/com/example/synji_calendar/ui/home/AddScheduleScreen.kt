@@ -304,59 +304,6 @@ fun AddScheduleScreen(
     }
 }
 
-// --- 时间选择器内容 ---
-@Composable
-fun WheelTimePickerContent(
-    initialTime: LocalTime,
-    onConfirm: (LocalTime) -> Unit,
-    onCancel: () -> Unit
-) {
-    var selectedHour by remember { mutableIntStateOf(initialTime.hour) }
-    var selectedMinute by remember { mutableIntStateOf(initialTime.minute) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 32.dp, start = 24.dp, end = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = onCancel) { Text("取消", color = Color.Gray, fontSize = 16.sp) }
-            Text("选择时间", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            TextButton(onClick = { onConfirm(LocalTime.of(selectedHour, selectedMinute)) }) {
-                Text("确定", color = CalendarSelectBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        Row(
-            modifier = Modifier.fillMaxWidth().height(220.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            WheelPicker(
-                items = (0..23).toList(),
-                initialItem = selectedHour,
-                onItemSelected = { selectedHour = it },
-                modifier = Modifier.weight(1f),
-                label = "时"
-            )
-            WheelPicker(
-                items = (0..59).toList(),
-                initialItem = selectedMinute,
-                onItemSelected = { selectedMinute = it },
-                modifier = Modifier.weight(1f),
-                label = "分"
-            )
-        }
-    }
-}
-
 @Composable
 private fun AddScheduleDivider() {
     HorizontalDivider(

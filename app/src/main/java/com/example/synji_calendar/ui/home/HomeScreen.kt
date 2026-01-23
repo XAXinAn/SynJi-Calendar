@@ -21,12 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.ContentPasteSearch
 import androidx.compose.material.icons.outlined.Groups
@@ -276,72 +276,6 @@ fun HomeScreen(
     }
 }
 
-// --- 底部弹出滚轮选择器内容 ---
-@Composable
-fun WheelDatePickerContent(
-    initialDate: LocalDate,
-    onConfirm: (LocalDate) -> Unit,
-    onCancel: () -> Unit
-) {
-    var selectedYear by remember { mutableIntStateOf(initialDate.year) }
-    var selectedMonth by remember { mutableIntStateOf(initialDate.monthValue) }
-    var selectedDay by remember { mutableIntStateOf(initialDate.dayOfMonth) }
-
-    val daysInMonth = YearMonth.of(selectedYear, selectedMonth).lengthOfMonth()
-    LaunchedEffect(selectedYear, selectedMonth) {
-        if (selectedDay > daysInMonth) selectedDay = daysInMonth
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 32.dp, start = 24.dp, end = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = onCancel) { Text("取消", color = Color.Gray, fontSize = 16.sp) }
-            Text("选择日期", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            TextButton(onClick = { onConfirm(LocalDate.of(selectedYear, selectedMonth, selectedDay)) }) {
-                Text("确定", color = CalendarSelectBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        Row(
-            modifier = Modifier.fillMaxWidth().height(220.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            WheelPicker(
-                items = (1970..2100).toList(),
-                initialItem = selectedYear,
-                onItemSelected = { selectedYear = it },
-                modifier = Modifier.weight(1.2f),
-                label = "年"
-            )
-            WheelPicker(
-                items = (1..12).toList(),
-                initialItem = selectedMonth,
-                onItemSelected = { selectedMonth = it },
-                modifier = Modifier.weight(1f),
-                label = "月"
-            )
-            WheelPicker(
-                items = (1..daysInMonth).toList(),
-                initialItem = selectedDay,
-                onItemSelected = { selectedDay = it },
-                modifier = Modifier.weight(1f),
-                label = "日"
-            )
-        }
-    }
-}
-
 @Composable
 fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEditSchedule: (Schedule) -> Unit) {
     val allSchedules by homeViewModel.allSchedules.collectAsState()
@@ -497,9 +431,9 @@ fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
                 }
             }
             
-            // 右端引导图标 - 使用通用的 KeyboardArrowRight 避免编译错误
+            // 右端引导图标
             Icon(
-                imageVector = Icons.Default.KeyboardArrowRight,
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = Color.LightGray.copy(alpha = 0.5f),
                 modifier = Modifier.size(20.dp)

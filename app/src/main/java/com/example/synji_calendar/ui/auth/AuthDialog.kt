@@ -1,17 +1,15 @@
 package com.example.synji_calendar.ui.auth
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -26,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.synji_calendar.ui.home.BgGradientEnd
 import com.example.synji_calendar.ui.home.BgGradientStart
 import com.example.synji_calendar.ui.home.ContainerGrey
@@ -35,11 +35,29 @@ import com.example.synji_calendar.ui.home.TextTitle
 @Composable
 fun AuthDialog(
     onDismiss: () -> Unit,
-    onLoginSuccess: () -> Unit
+    onLoginSuccess: () -> Unit,
+    authViewModel: AuthViewModel = viewModel()
 ) {
     var phoneNumber by remember { mutableStateOf("") }
     var verificationCode by remember { mutableStateOf("") }
     var isAgreed by remember { mutableStateOf(false) }
+    
+    val authState by authViewModel.authState.collectAsState()
+    val context = LocalContext.current
+
+    // 监听登录成功状态
+    LaunchedEffect(authState.isLoggedIn) {
+        if (authState.isLoggedIn) {
+            onLoginSuccess()
+        }
+    }
+
+    // 监听错误信息
+    LaunchedEffect(authState.error) {
+        authState.error?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -178,7 +196,9 @@ fun AuthDialog(
                             )
                             
                             TextButton(
-                                onClick = { /* 发送验证码逻辑 */ },
+                                onClick = { 
+                                    authViewModel.sendVerificationCode(phoneNumber)
+                                },
                                 colors = ButtonDefaults.textButtonColors(contentColor = BgGradientStart),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
@@ -224,7 +244,7 @@ fun AuthDialog(
 
                     Spacer(modifier = Modifier.height(40.dp))
 
-                    // 登录按钮 - 文字改为“登录/注册”
+                    // 登录按钮
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -232,11 +252,14 @@ fun AuthDialog(
                             .clip(RoundedCornerShape(28.dp))
                             .background(
                                 brush = Brush.horizontalGradient(
-                                    if (isAgreed) listOf(BgGradientStart, BgGradientEnd)
+                                    if (isAgreed && phoneNumber.isNotEmpty() && verificationCode.isNotEmpty()) 
+                                        listOf(BgGradientStart, BgGradientEnd)
                                     else listOf(Color.LightGray, Color.LightGray)
                                 )
                             )
-                            .clickable(enabled = isAgreed) { onLoginSuccess() },
+                            .clickable(enabled = isAgreed && phoneNumber.isNotEmpty() && verificationCode.isNotEmpty()) { 
+                                authViewModel.login(phoneNumber, verificationCode)
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

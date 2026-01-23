@@ -25,7 +25,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
 
-// --- 提取自各页面的公共归属选择界面 ---
+// --- 归属选择界面 ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BelongingSelectionScreen(
@@ -95,7 +95,70 @@ fun BelongingSelectionScreen(
     }
 }
 
-// --- 提取自各页面的滚轮选择器基础组件 ---
+// --- 日期选择器内容 ---
+@Composable
+fun WheelDatePickerContent(
+    initialDate: LocalDate,
+    onConfirm: (LocalDate) -> Unit,
+    onCancel: () -> Unit
+) {
+    var selectedYear by remember { mutableIntStateOf(initialDate.year) }
+    var selectedMonth by remember { mutableIntStateOf(initialDate.monthValue) }
+    var selectedDay by remember { mutableIntStateOf(initialDate.dayOfMonth) }
+
+    val daysInMonth = YearMonth.of(selectedYear, selectedMonth).lengthOfMonth()
+    LaunchedEffect(selectedYear, selectedMonth) {
+        if (selectedDay > daysInMonth) selectedDay = daysInMonth
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 32.dp, start = 24.dp, end = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onCancel) { Text("取消", color = Color.Gray, fontSize = 16.sp) }
+            Text("选择日期", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            TextButton(onClick = { onConfirm(LocalDate.of(selectedYear, selectedMonth, selectedDay)) }) {
+                Text("确定", color = CalendarSelectBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth().height(220.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            WheelPicker(items = (1970..2100).toList(), initialItem = selectedYear, onItemSelected = { selectedYear = it }, modifier = Modifier.weight(1.2f), label = "年")
+            WheelPicker(items = (1..12).toList(), initialItem = selectedMonth, onItemSelected = { selectedMonth = it }, modifier = Modifier.weight(1f), label = "月")
+            WheelPicker(items = (1..daysInMonth).toList(), initialItem = selectedDay, onItemSelected = { selectedDay = it }, modifier = Modifier.weight(1f), label = "日")
+        }
+    }
+}
+
+// --- 时间选择器内容 ---
+@Composable
+fun WheelTimePickerContent(
+    initialTime: LocalTime,
+    onConfirm: (LocalTime) -> Unit,
+    onCancel: () -> Unit
+) {
+    var selectedHour by remember { mutableIntStateOf(initialTime.hour) }
+    var selectedMinute by remember { mutableIntStateOf(initialTime.minute) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 32.dp, start = 24.dp, end = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onCancel) { Text("取消", color = Color.Gray, fontSize = 16.sp) }
+            Text("选择时间", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            TextButton(onClick = { onConfirm(LocalTime.of(selectedHour, selectedMinute)) }) {
+                Text("确定", color = CalendarSelectBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth().height(220.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            WheelPicker(items = (0..23).toList(), initialItem = selectedHour, onItemSelected = { selectedHour = it }, modifier = Modifier.weight(1f), label = "时")
+            WheelPicker(items = (0..59).toList(), initialItem = selectedMinute, onItemSelected = { selectedMinute = it }, modifier = Modifier.weight(1f), label = "分")
+        }
+    }
+}
+
+// --- 基础滚轮组件 ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> WheelPicker(

@@ -224,7 +224,7 @@ fun AuthDialog(
 
                     Spacer(modifier = Modifier.height(40.dp))
 
-                    // 登录按钮
+                    // 登录按钮 - 文字改为“登录/注册”
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -240,7 +240,7 @@ fun AuthDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "登录", 
+                            "登录/注册", 
                             fontSize = 18.sp, 
                             fontWeight = FontWeight.Bold, 
                             color = Color.White

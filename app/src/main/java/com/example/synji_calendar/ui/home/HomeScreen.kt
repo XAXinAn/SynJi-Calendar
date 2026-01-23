@@ -9,11 +9,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -30,7 +27,6 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.WorkOutline
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.ContentPasteSearch
 import androidx.compose.material.icons.outlined.Groups
@@ -47,7 +43,6 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -82,7 +77,8 @@ data class DayDisplayInfo(
 @Composable
 fun HomeScreen(
     homeViewModel: HomeViewModel = viewModel(),
-    onAddSchedule: (LocalDate) -> Unit = {}
+    onAddSchedule: (LocalDate) -> Unit = {},
+    onEditSchedule: (Schedule) -> Unit = {}
 ) {
     val holidayMap by homeViewModel.holidays.collectAsState()
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { }
@@ -243,7 +239,7 @@ fun HomeScreen(
                         }
 
                         selectedDate?.let { date ->
-                            ScheduleSection(date, homeViewModel)
+                            ScheduleSection(date, homeViewModel, onEditSchedule)
                         }
                         
                         Spacer(modifier = Modifier.height(80.dp))
@@ -346,76 +342,8 @@ fun WheelDatePickerContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun <T> WheelPicker(
-    items: List<T>,
-    initialItem: T,
-    onItemSelected: (T) -> Unit,
-    modifier: Modifier = Modifier,
-    label: String = ""
-) {
-    val itemHeight = 44.dp
-    val visibleItems = 5
-    val startIndex = items.indexOf(initialItem).coerceAtLeast(0)
-    val state = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
-    val flingBehavior = rememberSnapFlingBehavior(lazyListState = state)
-
-    LaunchedEffect(state.isScrollInProgress) {
-        if (!state.isScrollInProgress) {
-            val centerIndex = state.firstVisibleItemIndex
-            if (centerIndex in items.indices) {
-                onItemSelected(items[centerIndex])
-            }
-        }
-    }
-
-    Box(modifier = modifier.height(itemHeight * visibleItems), contentAlignment = Alignment.Center) {
-        HorizontalDivider(modifier = Modifier.offset(y = -itemHeight/2).fillMaxWidth(0.85f), thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.3f))
-        HorizontalDivider(modifier = Modifier.offset(y = itemHeight/2).fillMaxWidth(0.85f), thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.3f))
-
-        // 固定单位标签：始终静止在中心
-        if (label.isNotEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = label,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.Black,
-                    modifier = Modifier.offset(x = if(label == "年") 48.dp else 28.dp)
-                )
-            }
-        }
-
-        LazyColumn(
-            state = state,
-            flingBehavior = flingBehavior,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = itemHeight * 2)
-        ) {
-            items(items.size) { index ->
-                val item = items[index]
-                val isSelected = remember { derivedStateOf { state.firstVisibleItemIndex == index } }
-                
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(itemHeight),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = item.toString(),
-                        fontSize = if (isSelected.value) 22.sp else 18.sp,
-                        fontWeight = if (isSelected.value) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSelected.value) Color.Black else Color.LightGray.copy(alpha = 0.8f),
-                        modifier = Modifier.offset(x = if(label.isNotEmpty()) (-12).dp else 0.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel) {
+fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEditSchedule: (Schedule) -> Unit) {
     val allSchedules by homeViewModel.allSchedules.collectAsState()
     val schedules = remember(allSchedules, selectedDate) {
         allSchedules.filter { it.date == selectedDate }.sortedBy { if(it.isAllDay) LocalTime.MIN else it.time }
@@ -462,7 +390,7 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel) {
             }
         } else {
             schedules.forEach { schedule ->
-                ScheduleCard(schedule)
+                ScheduleCard(schedule, onClick = { onEditSchedule(schedule) })
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -470,14 +398,15 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel) {
 }
 
 @Composable
-fun ScheduleCard(item: Schedule) {
+fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
     // 竖线颜色：重要用红色，普通用深灰色 0xFF535353
     val accentColor = if (item.isImportant) WorkRed else Color(0xFF535353)
     
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .padding(vertical = 2.dp)
+            .clickable { onClick() },
         shape = RoundedCornerShape(20.dp),
         color = Color.White,
         shadowElevation = 0.5.dp

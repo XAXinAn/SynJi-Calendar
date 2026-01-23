@@ -44,4 +44,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun addSchedule(schedule: Schedule) {
         _schedules.value = _schedules.value + schedule
     }
+
+    fun deleteSchedule(schedule: Schedule) {
+        _schedules.value = _schedules.value.filter { it.id != schedule.id }
+    }
+
+    fun updateSchedule(updatedSchedule: Schedule) {
+        _schedules.value = _schedules.value.map {
+            if (it.id == updatedSchedule.id) updatedSchedule else it
+        }
+    }
 }

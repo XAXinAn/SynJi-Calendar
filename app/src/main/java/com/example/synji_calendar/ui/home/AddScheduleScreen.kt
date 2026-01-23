@@ -5,8 +5,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -302,112 +300,6 @@ fun AddScheduleScreen(
                 },
                 onCancel = { showTimePicker = false }
             )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BelongingSelectionScreen(
-    currentBelonging: String,
-    onSelected: (String) -> Unit,
-    onBack: () -> Unit
-) {
-    var searchQuery by remember { mutableStateOf("") }
-    val allOptions = listOf("个人", "5群", "工作", "生活")
-    val filteredOptions = allOptions.filter { it.contains(searchQuery, ignoreCase = true) }
-
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("选择归属", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextTitle) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ChevronLeft, "Back", modifier = Modifier.size(32.dp), tint = IconColor)
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.White)
-            )
-        },
-        containerColor = ContainerGrey
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-        ) {
-            // Search Bar
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = Color.White
-            ) {
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Search, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    BasicTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier.weight(1f),
-                        textStyle = TextStyle(fontSize = 15.sp, color = TextTitle),
-                        decorationBox = { innerTextField ->
-                            if (searchQuery.isEmpty()) {
-                                Text("搜索归属选项", color = Color.LightGray, fontSize = 15.sp)
-                            }
-                            innerTextField()
-                        }
-                    )
-                }
-            }
-
-            // Options List
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-            ) {
-                items(filteredOptions) { option ->
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.White,
-                        onClick = { onSelected(option) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .background(CalendarSelectBlue.copy(alpha = 0.1f), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.Person, null, tint = CalendarSelectBlue, modifier = Modifier.size(20.dp))
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                text = option,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = TextTitle,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (option == currentBelonging) {
-                                Icon(Icons.Default.Check, null, tint = CalendarSelectBlue)
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 }

@@ -1,260 +1,357 @@
 package com.example.synji_calendar.ui.home
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleDetailScreen(
-    initialDate: LocalDate = LocalDate.now(),
-    onBack: () -> Unit = {}
+    schedule: Schedule,
+    onBack: () -> Unit = {},
+    homeViewModel: HomeViewModel = viewModel()
 ) {
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        "日程详情",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextTitle
+    var title by remember { mutableStateOf(schedule.title) }
+    var location by remember { mutableStateOf(schedule.location) }
+    var isImportant by remember { mutableStateOf(schedule.isImportant) }
+    var isAllDay by remember { mutableStateOf(schedule.isAllDay) }
+    
+    var selectedDate by remember { mutableStateOf(schedule.date) }
+    var selectedTime by remember { mutableStateOf(schedule.time) }
+    var selectedBelonging by remember { mutableStateOf(schedule.belonging) }
+    
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var isSelectingBelonging by remember { mutableStateOf(false) }
+    
+    val sheetState = rememberModalBottomSheetState()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            "日程详情",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextTitle
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Default.ChevronLeft, "Back", modifier = Modifier.size(32.dp), tint = IconColor)
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            homeViewModel.deleteSchedule(schedule)
+                            onBack()
+                        }) {
+                            Icon(Icons.Default.DeleteOutline, "Delete", tint = Color.Gray.copy(alpha = 0.7f))
+                        }
+                        TextButton(onClick = {
+                            if (title.isNotBlank()) {
+                                homeViewModel.updateSchedule(
+                                    schedule.copy(
+                                        title = title,
+                                        date = selectedDate,
+                                        time = if (isAllDay) LocalTime.MIN else selectedTime,
+                                        isAllDay = isAllDay,
+                                        location = location,
+                                        belonging = selectedBelonging,
+                                        isImportant = isImportant
+                                    )
+                                )
+                                onBack()
+                            }
+                        }) {
+                            Text(
+                                "完成",
+                                color = CalendarSelectBlue,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = Color.Transparent
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.Default.ChevronLeft,
-                            contentDescription = "Back",
-                            modifier = Modifier.size(32.dp),
-                            tint = IconColor
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { /* Delete logic */ }) {
-                        Icon(
-                            Icons.Default.DeleteOutline,
-                            contentDescription = "Delete",
-                            tint = Color.Gray.copy(alpha = 0.7f)
-                        )
-                    }
-                    TextButton(onClick = { /* Save logic */ }) {
-                        Text(
-                            "完成",
-                            color = CalendarSelectBlue,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent
                 )
-            )
-        },
-        containerColor = ContainerGrey
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(10.dp))
-            
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
-                color = Color.White,
-                shadowElevation = 0.5.dp
+            },
+            containerColor = ContainerGrey
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color.White,
+                    shadowElevation = 0.5.dp
                 ) {
-                    // Category Section - Optimized Visuals
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .background(CalendarSelectBlue.copy(alpha = 0.1f), CircleShape),
-                        contentAlignment = Alignment.Center
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.School,
-                            contentDescription = null,
-                            tint = CalendarSelectBlue,
-                            modifier = Modifier.size(36.dp)
+                        // Title Input
+                        TextField(
+                            value = title,
+                            onValueChange = { title = it },
+                            placeholder = { Text("请输入日程标题", color = Color.LightGray) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                errorIndicatorColor = Color.Transparent
+                            ),
+                            textStyle = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextTitle)
                         )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Surface(
-                        onClick = { /* Switch category logic */ },
-                        shape = RoundedCornerShape(12.dp),
-                        color = ContainerGrey
-                    ) {
-                        Text(
-                            text = "学习",
-                            color = CalendarSelectBlue,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+
+                        DetailDivider()
+
+                        // All Day Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            DetailIconWithBg(Icons.Default.AccessTimeFilled)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("全天", fontSize = 15.sp, color = Color.Gray)
+                            Spacer(modifier = Modifier.weight(1f))
+                            Switch(
+                                checked = isAllDay,
+                                onCheckedChange = { isAllDay = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = CalendarSelectBlue,
+                                    uncheckedThumbColor = Color.White,
+                                    uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
+                                    uncheckedBorderColor = Color.Transparent
+                                )
+                            )
+                        }
+                        DetailDivider()
+
+                        // Date
+                        DetailEditRow(
+                            Icons.Default.CalendarToday, 
+                            "日期", 
+                            selectedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")),
+                            onClick = { showDatePicker = true }
                         )
+                        DetailDivider()
+                        
+                        // Time (Only show if not All Day)
+                        if (!isAllDay) {
+                            DetailEditRow(
+                                Icons.Default.AccessTime, 
+                                "时间", 
+                                selectedTime.format(DateTimeFormatter.ofPattern("HH:mm")),
+                                onClick = { showTimePicker = true }
+                            )
+                            DetailDivider()
+                        }
+                        
+                        // Location Input
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            DetailIconWithBg(Icons.Default.LocationOn)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("地点", fontSize = 15.sp, color = Color.Gray, modifier = Modifier.width(60.dp))
+                            Spacer(modifier = Modifier.weight(1f))
+                            
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                                if (location.isEmpty()) {
+                                    Text("未设置地点", color = Color.LightGray, fontSize = 15.sp)
+                                }
+                                BasicTextField(
+                                    value = location,
+                                    onValueChange = { location = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textStyle = TextStyle(
+                                        fontSize = 15.sp, 
+                                        textAlign = TextAlign.End,
+                                        color = TextTitle
+                                    ),
+                                    singleLine = true,
+                                    cursorBrush = SolidColor(CalendarSelectBlue)
+                                )
+                            }
+                        }
+                        DetailDivider()
+                        
+                        DetailEditRow(
+                            Icons.Default.Groups, 
+                            "归属", 
+                            selectedBelonging,
+                            onClick = { isSelectingBelonging = true }
+                        )
+                        DetailDivider()
+                        
+                        // Important Toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            DetailIconWithBg(Icons.Default.Star, if (isImportant) Color(0xFFFFB300) else IconColor.copy(alpha = 0.6f))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("重要", fontSize = 15.sp, color = Color.Gray)
+                            Spacer(modifier = Modifier.weight(1f))
+                            Switch(
+                                checked = isImportant,
+                                onCheckedChange = { isImportant = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = CalendarSelectBlue,
+                                    uncheckedThumbColor = Color.White,
+                                    uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
+                                    uncheckedBorderColor = Color.Transparent
+                                )
+                            )
+                        }
                     }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    // Detail List
-                    DetailViewRow(Icons.AutoMirrored.Filled.Notes, "标题", "计算机网络-期末考试-\nA23计算机-2026")
-                    DetailViewDivider()
-                    
-                    DetailViewRow(Icons.Default.CalendarToday, "日期", initialDate.toString())
-                    DetailViewDivider()
-                    
-                    DetailViewRow(Icons.Default.AccessTime, "时间", "上午 9:30")
-                    DetailViewDivider()
-                    
-                    DetailViewRow(Icons.Default.LocationOn, "地点", "未设置地点", isPlaceholder = true)
-                    DetailViewDivider()
-                    
-                    DetailViewRow(Icons.Default.Groups, "归属", "个人")
-                    DetailViewDivider()
-                    
-                    DetailImportantToggleRow()
                 }
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Optional: Add a memo/notes section if needed in the future
-            Text(
-                "日程由「5群」自动同步",
-                fontSize = 12.sp,
-                color = Color.LightGray,
-                textAlign = TextAlign.Center
+        }
+
+        // 归属选择新界面 (Overlay)
+        AnimatedVisibility(
+            visible = isSelectingBelonging,
+            enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)),
+            exit = slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
+        ) {
+            BelongingSelectionScreen(
+                currentBelonging = selectedBelonging,
+                onSelected = {
+                    selectedBelonging = it
+                    isSelectingBelonging = false
+                },
+                onBack = { isSelectingBelonging = false }
+            )
+        }
+    }
+
+    // 日期选择器
+    if (showDatePicker) {
+        ModalBottomSheet(
+            onDismissRequest = { showDatePicker = false },
+            sheetState = sheetState,
+            containerColor = Color.White,
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+            dragHandle = null
+        ) {
+            WheelDatePickerContent(
+                initialDate = selectedDate,
+                onConfirm = { date ->
+                    selectedDate = date
+                    showDatePicker = false
+                },
+                onCancel = { showDatePicker = false }
+            )
+        }
+    }
+
+    // 时间选择器
+    if (showTimePicker) {
+        ModalBottomSheet(
+            onDismissRequest = { showTimePicker = false },
+            sheetState = sheetState,
+            containerColor = Color.White,
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+            dragHandle = null
+        ) {
+            WheelTimePickerContent(
+                initialTime = selectedTime,
+                onConfirm = { time ->
+                    selectedTime = time
+                    showTimePicker = false
+                },
+                onCancel = { showTimePicker = false }
             )
         }
     }
 }
 
 @Composable
-private fun DetailViewDivider() {
+private fun DetailDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(vertical = 14.dp),
+        modifier = Modifier.padding(vertical = 4.dp),
         thickness = 0.5.dp,
         color = Color(0xFFF0F0F0)
     )
 }
 
 @Composable
-private fun DetailViewRow(icon: ImageVector, label: String, value: String, isPlaceholder: Boolean = false) {
+private fun DetailIconWithBg(icon: ImageVector, tint: Color = IconColor.copy(alpha = 0.6f)) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .background(ContainerGrey, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@Composable
+private fun DetailEditRow(icon: ImageVector, label: String, value: String, onClick: () -> Unit = {}) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(48.dp).clickable { onClick() },
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(ContainerGrey, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = IconColor.copy(alpha = 0.6f),
-                modifier = Modifier.size(16.dp)
-            )
-        }
-        
+        DetailIconWithBg(icon)
         Spacer(modifier = Modifier.width(12.dp))
-        
-        Text(
-            text = label,
-            fontSize = 15.sp,
-            color = Color.Gray,
-            modifier = Modifier.width(60.dp)
-        )
-        
+        Text(text = label, fontSize = 15.sp, color = Color.Gray, modifier = Modifier.width(60.dp))
         Spacer(modifier = Modifier.weight(1f))
-        
         Text(
             text = value,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
-            color = if (isPlaceholder) Color.LightGray else TextTitle,
-            textAlign = TextAlign.End,
-            lineHeight = 20.sp
+            color = if (value.contains("选择")) Color.LightGray else TextTitle,
+            textAlign = TextAlign.End
         )
+        Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray, modifier = Modifier.size(20.dp))
     }
-}
-
-@Composable
-private fun DetailImportantToggleRow() {
-    var isImportant by remember { mutableStateOf(true) }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(ContainerGrey, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Star,
-                contentDescription = null,
-                tint = if (isImportant) Color(0xFFFFB300) else IconColor.copy(alpha = 0.6f),
-                modifier = Modifier.size(16.dp)
-            )
-        }
-        
-        Spacer(modifier = Modifier.width(12.dp))
-        
-        Text(
-            text = "重要",
-            fontSize = 15.sp,
-            color = Color.Gray
-        )
-        
-        Spacer(modifier = Modifier.weight(1f))
-        
-        Switch(
-            checked = isImportant,
-            onCheckedChange = { isImportant = it },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = CalendarSelectBlue,
-                uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
-                uncheckedBorderColor = Color.Transparent
-            )
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun ScheduleDetailPreview() {
-    ScheduleDetailScreen()
 }

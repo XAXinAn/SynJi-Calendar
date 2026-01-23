@@ -1,6 +1,7 @@
 package com.example.synji_calendar.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,35 +15,59 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScheduleDetailScreen(onBack: () -> Unit = {}) {
+fun ScheduleDetailScreen(
+    initialDate: LocalDate = LocalDate.now(),
+    onBack: () -> Unit = {}
+) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { 
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("日程详情", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    }
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        "日程详情",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextTitle
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ChevronLeft, contentDescription = "Back", modifier = Modifier.size(32.dp))
+                        Icon(
+                            Icons.Default.ChevronLeft,
+                            contentDescription = "Back",
+                            modifier = Modifier.size(32.dp),
+                            tint = IconColor
+                        )
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Delete */ }) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color.Gray)
+                    IconButton(onClick = { /* Delete logic */ }) {
+                        Icon(
+                            Icons.Default.DeleteOutline,
+                            contentDescription = "Delete",
+                            tint = Color.Gray.copy(alpha = 0.7f)
+                        )
                     }
-                    IconButton(onClick = { /* Save */ }) {
-                        Icon(Icons.Default.Check, contentDescription = "Save", tint = Color.Gray)
+                    TextButton(onClick = { /* Save logic */ }) {
+                        Text(
+                            "完成",
+                            color = CalendarSelectBlue,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.Transparent
+                )
             )
         },
         containerColor = ContainerGrey
@@ -51,134 +76,178 @@ fun ScheduleDetailScreen(onBack: () -> Unit = {}) {
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.height(10.dp))
+            
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight(),
-                shape = RoundedCornerShape(32.dp),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
                 color = Color.White,
-                shadowElevation = 2.dp
+                shadowElevation = 0.5.dp
             ) {
-                Box(modifier = Modifier.padding(24.dp)) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Category Section - Optimized Visuals
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .background(CalendarSelectBlue.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
                     ) {
-                        // Category Icon & Label
                         Icon(
                             imageVector = Icons.Default.School,
                             contentDescription = null,
-                            tint = Color(0xFF4CAF50),
-                            modifier = Modifier.size(80.dp)
+                            tint = CalendarSelectBlue,
+                            modifier = Modifier.size(36.dp)
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "学习 (点击切换分类)",
-                            color = Color(0xFF4CAF50),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        // Detail Rows
-                        DetailRow(Icons.AutoMirrored.Filled.Notes, "标题", "计算机网络-期末考试-\nA23计算机-2026")
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
-                        
-                        DetailRow(Icons.Default.CalendarToday, "日期", "2026-01-12")
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
-                        
-                        DetailRow(Icons.Default.AccessTime, "时间", "上午 9:30")
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
-                        
-                        DetailRow(Icons.Default.LocationOn, "地点", "未设置地点", isPlaceholder = true)
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
-                        
-                        DetailRow(Icons.Default.Groups, "归属", "个人")
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
-                        
-                        ImportantToggleRow()
                     }
-
-                    // Floating Camera Icon inside the card
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
                     Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 8.dp, y = 80.dp)
-                            .size(48.dp),
-                        shape = CircleShape,
-                        color = Color(0xFF535353).copy(alpha = 0.8f)
+                        onClick = { /* Switch category logic */ },
+                        shape = RoundedCornerShape(12.dp),
+                        color = ContainerGrey
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.PhotoCamera, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                        }
+                        Text(
+                            text = "学习",
+                            color = CalendarSelectBlue,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
                     }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    // Detail List
+                    DetailViewRow(Icons.AutoMirrored.Filled.Notes, "标题", "计算机网络-期末考试-\nA23计算机-2026")
+                    DetailViewDivider()
+                    
+                    DetailViewRow(Icons.Default.CalendarToday, "日期", initialDate.toString())
+                    DetailViewDivider()
+                    
+                    DetailViewRow(Icons.Default.AccessTime, "时间", "上午 9:30")
+                    DetailViewDivider()
+                    
+                    DetailViewRow(Icons.Default.LocationOn, "地点", "未设置地点", isPlaceholder = true)
+                    DetailViewDivider()
+                    
+                    DetailViewRow(Icons.Default.Groups, "归属", "个人")
+                    DetailViewDivider()
+                    
+                    DetailImportantToggleRow()
                 }
             }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // Optional: Add a memo/notes section if needed in the future
+            Text(
+                "日程由「5群」自动同步",
+                fontSize = 12.sp,
+                color = Color.LightGray,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
 
 @Composable
-fun DetailRow(icon: ImageVector, label: String, value: String, isPlaceholder: Boolean = false) {
+private fun DetailViewDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 14.dp),
+        thickness = 0.5.dp,
+        color = Color(0xFFF0F0F0)
+    )
+}
+
+@Composable
+private fun DetailViewRow(icon: ImageVector, label: String, value: String, isPlaceholder: Boolean = false) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.LightGray,
-            modifier = Modifier.size(20.dp).padding(top = 2.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(ContainerGrey, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = IconColor.copy(alpha = 0.6f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        
         Spacer(modifier = Modifier.width(12.dp))
+        
         Text(
             text = label,
-            fontSize = 16.sp,
-            color = Color.Black,
+            fontSize = 15.sp,
+            color = Color.Gray,
             modifier = Modifier.width(60.dp)
         )
+        
         Spacer(modifier = Modifier.weight(1f))
+        
         Text(
             text = value,
-            fontSize = 16.sp,
-            color = if (isPlaceholder) Color.LightGray else Color.Black,
-            textAlign = androidx.compose.ui.text.style.TextAlign.End
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (isPlaceholder) Color.LightGray else TextTitle,
+            textAlign = TextAlign.End,
+            lineHeight = 20.sp
         )
     }
 }
 
 @Composable
-fun ImportantToggleRow() {
+private fun DetailImportantToggleRow() {
     var isImportant by remember { mutableStateOf(true) }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = Icons.Default.Star,
-            contentDescription = null,
-            tint = Color.LightGray,
-            modifier = Modifier.size(20.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(ContainerGrey, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Star,
+                contentDescription = null,
+                tint = if (isImportant) Color(0xFFFFB300) else IconColor.copy(alpha = 0.6f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        
         Spacer(modifier = Modifier.width(12.dp))
+        
         Text(
             text = "重要",
-            fontSize = 16.sp,
-            color = Color.Black
+            fontSize = 15.sp,
+            color = Color.Gray
         )
+        
         Spacer(modifier = Modifier.weight(1f))
+        
         Switch(
             checked = isImportant,
             onCheckedChange = { isImportant = it },
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFF4CAF50),
+                checkedTrackColor = CalendarSelectBlue,
                 uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = Color.LightGray
+                uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
+                uncheckedBorderColor = Color.Transparent
             )
         )
     }

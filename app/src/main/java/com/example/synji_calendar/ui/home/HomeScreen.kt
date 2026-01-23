@@ -21,8 +21,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
@@ -51,6 +53,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nlf.calendar.Solar
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -74,17 +77,12 @@ data class DayDisplayInfo(
     val holiday: Holiday?
 )
 
-data class ScheduleItem(
-    val time: String,
-    val title: String,
-    val category: String,
-    val source: String,
-    val hasWarning: Boolean = false
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
+fun HomeScreen(
+    homeViewModel: HomeViewModel = viewModel(),
+    onAddSchedule: (LocalDate) -> Unit = {}
+) {
     val holidayMap by homeViewModel.holidays.collectAsState()
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { }
     val scope = rememberCoroutineScope()
@@ -194,7 +192,7 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                         .verticalScroll(rememberScrollState())
                 ) {
                     Spacer(modifier = Modifier.height(20.dp))
-                    CalendarHeader(displayMonth)
+                    CalendarHeader(displayMonth, onAddClick = { onAddSchedule(selectedDate ?: LocalDate.now()) })
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     val config = LocalConfiguration.current
@@ -239,7 +237,7 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                     }
 
                     selectedDate?.let { date ->
-                        ScheduleSection(date)
+                        ScheduleSection(date, homeViewModel)
                     }
                     
                     Spacer(modifier = Modifier.height(80.dp))
@@ -410,7 +408,12 @@ fun <T> WheelPicker(
 }
 
 @Composable
-fun ScheduleSection(selectedDate: LocalDate) {
+fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel) {
+    val allSchedules by homeViewModel.allSchedules.collectAsState()
+    val schedules = remember(allSchedules, selectedDate) {
+        allSchedules.filter { it.date == selectedDate }.sortedBy { if(it.isAllDay) LocalTime.MIN else it.time }
+    }
+    
     val solar = remember(selectedDate) { Solar.fromYmd(selectedDate.year, selectedDate.monthValue, selectedDate.dayOfMonth) }
     val lunar = remember(solar) { solar.lunar }
     
@@ -446,49 +449,105 @@ fun ScheduleSection(selectedDate: LocalDate) {
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
-        val schedules = listOf(
-            ScheduleItem("全天", "5群海报设计", "工作", "来源: 5群"),
-            ScheduleItem("14:00", "5群策划评审", "工作", "来源: 5群", hasWarning = true)
-        )
-
-        schedules.forEach { item ->
-            ScheduleCard(item)
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-}
-
-@Composable
-fun ScheduleCard(item: ScheduleItem) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = item.time, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            if (item.hasWarning) Icon(Icons.Default.Error, null, tint = WorkRed, modifier = Modifier.size(18.dp).padding(top = 4.dp))
-        }
-        Box(modifier = Modifier.width(2.5.dp).height(40.dp).background(CalendarSelectBlue.copy(alpha = 0.3f), CircleShape))
-        Column(modifier = Modifier.padding(start = 20.dp).weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(color = CalendarSelectBlue.copy(alpha = 0.1f), shape = RoundedCornerShape(6.dp)) {
-                    Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = item.category, fontSize = 11.sp, color = CalendarSelectBlue, fontWeight = FontWeight.Medium)
-                        Icon(Icons.Default.WorkOutline, null, tint = CalendarSelectBlue, modifier = Modifier.size(12.dp).padding(start = 2.dp))
-                    }
-                }
-                Spacer(modifier = Modifier.width(8.dp)); Text(text = item.source, fontSize = 12.sp, color = Color.Gray)
+        if (schedules.isEmpty()) {
+            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
+                Text("暂无日程", color = Color.Gray, fontSize = 14.sp)
             }
-            Spacer(modifier = Modifier.height(6.dp)); Text(text = item.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        } else {
+            schedules.forEach { schedule ->
+                ScheduleCard(schedule)
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
     }
 }
 
 @Composable
-fun CalendarHeader(currentMonth: YearMonth) {
+fun ScheduleCard(item: Schedule) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .padding(vertical = 4.dp), 
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Time and Warning Icon
+        Column(modifier = Modifier.width(60.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = if (item.isAllDay) "全天" else item.time.format(DateTimeFormatter.ofPattern("HH:mm")), 
+                fontSize = if (item.isAllDay) 15.sp else 16.sp, 
+                fontWeight = FontWeight.Bold, 
+                color = Color.Black
+            )
+            if (item.isImportant) {
+                Icon(
+                    Icons.Default.Error, 
+                    null, 
+                    tint = WorkRed, 
+                    modifier = Modifier.size(18.dp).padding(top = 4.dp)
+                )
+            }
+        }
+        
+        // Vertical line - Fixed color to 0xFF535353
+        Box(
+            modifier = Modifier
+                .width(2.5.dp)
+                .fillMaxHeight()
+                .background(Color(0xFF535353), CircleShape)
+        )
+        
+        // Main content
+        Column(modifier = Modifier.padding(start = 20.dp).weight(1f)) {
+            // 1. Top info: Source only
+            Text(
+                text = "来源: ${item.belonging}", 
+                fontSize = 12.sp, 
+                color = Color.Gray.copy(alpha = 0.8f)
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            // 2. Title
+            Text(
+                text = item.title, 
+                fontSize = 18.sp, 
+                fontWeight = FontWeight.Bold, 
+                color = Color.Black
+            )
+            
+            // 3. Location (Below title)
+            if (item.location.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn, 
+                        contentDescription = null, 
+                        tint = Color.Gray, 
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = item.location,
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CalendarHeader(currentMonth: YearMonth, onAddClick: () -> Unit = {}) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Menu, null, modifier = Modifier.size(26.dp), tint = Color.Black)
         Spacer(modifier = Modifier.weight(1f))
         Text(currentMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         Spacer(modifier = Modifier.weight(1f))
-        Box(modifier = Modifier.size(26.dp))
+        IconButton(onClick = onAddClick, modifier = Modifier.size(26.dp)) {
+            Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.Black)
+        }
     }
 }
 

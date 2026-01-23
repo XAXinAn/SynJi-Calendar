@@ -5,7 +5,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -98,25 +97,6 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
         }
     }
 
-    // Dynamic Height Calculation
-    val rows = remember(currentMonth) {
-        val firstDayOfWeek = currentMonth.atDay(1).dayOfWeek.value % 7
-        val neededSlots = firstDayOfWeek + currentMonth.lengthOfMonth()
-        if (neededSlots <= 28) 4 else if (neededSlots <= 35) 5 else 6
-    }
-    
-    val targetHeight = when(rows) {
-        4 -> 230.dp
-        5 -> 280.dp
-        else -> 330.dp
-    }
-    
-    val animatedHeight by animateDpAsState(
-        targetValue = targetHeight,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow),
-        label = "CalendarHeight"
-    )
-
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -156,32 +136,37 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
 
             // 3. Bottom Container
             Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
-                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                        .animateContentSize(spring(stiffness = Spring.StiffnessLow)) // Content below follows smoothly
+                ) {
+                    // Header stays fixed outside pager
                     CalendarHeader(currentMonth)
                     Spacer(modifier = Modifier.height(8.dp))
                     
-                    Box(modifier = Modifier.fillMaxWidth().height(animatedHeight)) {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier.fillMaxSize(),
-                            verticalAlignment = Alignment.Top,
-                            beyondViewportPageCount = 1
-                        ) { page ->
-                            val month = initialMonth.plusMonths((page - initialPage).toLong())
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth(0.96f)
-                                        .animateContentSize(spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)),
-                                    shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.dp
-                                ) {
-                                    LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
-                                }
+                    // Only the Calendar card is swipable
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxWidth().wrapContentHeight(),
+                        verticalAlignment = Alignment.Top,
+                        beyondViewportPageCount = 1
+                    ) { page ->
+                        val month = initialMonth.plusMonths((page - initialPage).toLong())
+                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.96f)
+                                    .wrapContentHeight(),
+                                shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.dp
+                            ) {
+                                LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
                             }
                         }
                     }
 
-                    // --- SCHEDULE SECTION ---
+                    // Schedule section outside pager, follows the card smoothly
                     selectedDate?.let { date ->
                         ScheduleSection(date)
                     }
@@ -189,37 +174,18 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
             }
         }
 
-        // --- FLOATING ACTION BUTTONS ---
+        // --- FLOATING BUTTONS ---
         Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = 32.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            FloatingActionButton(
-                onClick = { /* Open full calendar */ },
-                containerColor = Color.White,
-                contentColor = IconColor,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.size(56.dp),
-                elevation = FloatingActionButtonDefaults.elevation(4.dp)
-            ) {
-                Icon(Icons.Default.CalendarMonth, contentDescription = null)
+            FloatingActionButton(onClick = { }, containerColor = Color.White, contentColor = IconColor, shape = RoundedCornerShape(16.dp), modifier = Modifier.size(56.dp)) {
+                Icon(Icons.Default.CalendarMonth, null)
             }
-
             FloatingActionButton(
-                onClick = {
-                    scope.launch {
-                        pagerState.animateScrollToPage(initialPage)
-                        selectedDate = LocalDate.now()
-                    }
-                },
-                containerColor = Color.White,
-                contentColor = CalendarSelectBlue,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.size(56.dp),
-                elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                onClick = { scope.launch { pagerState.animateScrollToPage(initialPage); selectedDate = LocalDate.now() } },
+                containerColor = Color.White, contentColor = CalendarSelectBlue, shape = RoundedCornerShape(16.dp), modifier = Modifier.size(56.dp)
             ) {
                 Text("今", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
@@ -231,74 +197,31 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
 fun ScheduleSection(selectedDate: LocalDate) {
     val solar = remember(selectedDate) { Solar.fromYmd(selectedDate.year, selectedDate.monthValue, selectedDate.dayOfMonth) }
     val lunar = remember(solar) { solar.lunar }
-    
     val diff = ChronoUnit.DAYS.between(LocalDate.now(), selectedDate)
-    val prefix = when (diff) {
-        0L -> "今天"
-        1L -> "明天"
-        2L -> "后天"
-        -1L -> "昨天"
-        -2L -> "前天"
-        else -> if (diff > 0) "${diff}天后" else "${-diff}天前"
-    }
-
-    val monthNum = lunar.month
-    val monthNames = listOf("", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二")
-    val monthName = monthNames[monthNum]
-    val alias = when(monthNum) {
-        1 -> "正月"
-        11 -> "冬月"
-        12 -> "腊月"
-        else -> null
-    }
-    val lunarMonthStr = if (alias != null) "${monthName}月($alias)" else "${monthName}月"
+    val prefix = when (diff) { 0L -> "今天"; 1L -> "明天"; 2L -> "后天"; -1L -> "昨天"; -2L -> "前天"; else -> if (diff > 0) "${diff}天后" else "${-diff}天前" }
+    val alias = when(lunar.month) { 1 -> "正月"; 11 -> "冬月"; 12 -> "腊月"; else -> null }
+    val lunarMonthStr = if (alias != null) "${lunar.monthInChinese}月($alias)" else "${lunar.monthInChinese}月"
     val dateStr = "$prefix 农历${lunarMonthStr}${lunar.dayInChinese}"
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 18.dp, start = 8.dp, end = 8.dp)) {
         Text(
-            text = dateStr,
-            fontSize = 15.sp, // Match 15.sp requirements
-            fontWeight = FontWeight.Normal,
-            lineHeight = 16.sp, // Explicitly set line height to match calendar numbers
-            style = TextStyle(
-                platformStyle = PlatformTextStyle(
-                    includeFontPadding = false
-                )
-            ),
-            color = Color.Black,
-            modifier = Modifier.padding(bottom = 16.dp)
+            text = dateStr, fontSize = 15.sp, fontWeight = FontWeight.Normal, lineHeight = 16.sp, 
+            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)), 
+            color = Color.Black, modifier = Modifier.padding(bottom = 16.dp)
         )
-
-        val schedules = listOf(
-            ScheduleItem("全天", "5群海报设计", "工作", "来源: 5群"),
-            ScheduleItem("14:00", "5群策划评审", "工作", "来源: 5群", hasWarning = true)
-        )
-
-        schedules.forEach { item ->
-            ScheduleCard(item)
-            Spacer(modifier = Modifier.height(12.dp))
-        }
+        val schedules = listOf(ScheduleItem("全天", "5群海报设计", "工作", "来源: 5群"), ScheduleItem("14:00", "5群策划评审", "工作", "来源: 5群", hasWarning = true))
+        schedules.forEach { item -> ScheduleCard(item); Spacer(modifier = Modifier.height(12.dp)) }
     }
 }
 
 @Composable
 fun ScheduleCard(item: ScheduleItem) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(
-            modifier = Modifier.width(50.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.width(50.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = item.time, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            if (item.hasWarning) {
-                Icon(Icons.Default.Error, null, tint = WorkRed, modifier = Modifier.size(20.dp).padding(top = 4.dp))
-            }
+            if (item.hasWarning) Icon(Icons.Default.Error, null, tint = WorkRed, modifier = Modifier.size(20.dp).padding(top = 4.dp))
         }
-
         Box(modifier = Modifier.width(2.dp).height(50.dp).background(CalendarSelectBlue.copy(alpha = 0.3f)))
-
         Column(modifier = Modifier.padding(start = 16.dp).weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(color = CalendarSelectBlue.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp)) {
@@ -307,36 +230,20 @@ fun ScheduleCard(item: ScheduleItem) {
                         Icon(Icons.Default.WorkOutline, null, tint = CalendarSelectBlue, modifier = Modifier.size(14.dp).padding(start = 4.dp))
                     }
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = item.source, fontSize = 12.sp, color = Color.LightGray)
+                Spacer(modifier = Modifier.width(8.dp)); Text(text = item.source, fontSize = 12.sp, color = Color.LightGray)
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = item.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            Spacer(modifier = Modifier.height(4.dp)); Text(text = item.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         }
     }
 }
 
 @Composable
 fun CalendarHeader(currentMonth: YearMonth) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Menu, null, modifier = Modifier.size(28.dp), tint = Color.Black)
-        
-        Spacer(modifier = Modifier.weight(1f)) // Push text to center
-        
-        Text(
-            text = currentMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")),
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black
-        )
-        
-        Spacer(modifier = Modifier.weight(1f)) // Equal weight to ensure center
-        
-        // Invisible placeholder icon to balance the left Menu icon for true centering
-        Box(modifier = Modifier.size(28.dp))
+        Spacer(modifier = Modifier.weight(1f))
+        Text(currentMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Spacer(modifier = Modifier.weight(1f)); Box(modifier = Modifier.size(28.dp))
     }
 }
 
@@ -375,7 +282,7 @@ fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth, s
             if (week.any { it.isCurrentMonth }) {
                 Row(modifier = Modifier.fillMaxWidth()) {
                     week.forEach { info ->
-                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.weight(1f).aspectRatio(1f), contentAlignment = Alignment.Center) {
                             CalendarDay(info, info.date == selectedDate, onDateSelected)
                         }
                     }
@@ -389,13 +296,13 @@ fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth, s
 fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (LocalDate) -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(46.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = info.isCurrentMonth) { onDateSelected(info.date) }
+        modifier = Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = info.isCurrentMonth) { onDateSelected(info.date) }
     ) {
         if (isSelected && info.isCurrentMonth) {
             if (info.isToday) {
-                Surface(modifier = Modifier.size(46.dp), shape = CircleShape, color = CalendarSelectBlue) {}
+                Surface(modifier = Modifier.fillMaxSize(0.9f), shape = CircleShape, color = CalendarSelectBlue) {}
             } else {
-                Surface(modifier = Modifier.size(46.dp), shape = CircleShape, border = BorderStroke(1.5.dp, CalendarSelectBlue), color = Color.Transparent) {}
+                Surface(modifier = Modifier.fillMaxSize(0.9f), shape = CircleShape, border = BorderStroke(1.5.dp, CalendarSelectBlue), color = Color.Transparent) {}
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Top) {

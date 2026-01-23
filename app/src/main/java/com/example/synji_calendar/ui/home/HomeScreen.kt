@@ -13,8 +13,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Error
@@ -30,10 +32,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +50,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlin.math.abs
 
 // --- COLOR CONSTANTS ---
 val BgGradientStart = Color(0xFFF7B07E)
@@ -97,6 +101,13 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
         }
     }
 
+    // --- 关键逻辑：计算当前月份需要的行数 ---
+    val rowCount = remember(currentMonth) {
+        val firstDayOfWeek = currentMonth.atDay(1).dayOfWeek.value % 7 // 0=Sun, 1=Mon...
+        val totalDays = currentMonth.lengthOfMonth()
+        (firstDayOfWeek + totalDays + 6) / 7
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -104,18 +115,18 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
                 .background(brush = Brush.verticalGradient(listOf(BgGradientStart, BgGradientEnd), 0f, 1000f))
         ) {
             // 1. Search Bar
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 40.dp, start = 20.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 20.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Surface(
-                    modifier = Modifier.weight(1f).height(40.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
-                    shape = RoundedCornerShape(20.dp), color = Color.White
+                    modifier = Modifier.weight(1f).height(44.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
+                    shape = RoundedCornerShape(22.dp), color = Color.White
                 ) {
-                    Row(modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Search, null, tint = Color(0xFF535353), modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("点击搜索日程", color = Color(0xFF535353), fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Search, null, tint = Color(0xFF888888), modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("点击搜索日程", color = Color(0xFF888888), fontSize = 15.sp, modifier = Modifier.weight(1f))
                         Box(modifier = Modifier.width(1.dp).height(16.dp).background(Color(0xFFEEEEEE)))
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("搜索", color = BgGradientStart, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+                        Text("搜索", color = BgGradientStart, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -127,7 +138,7 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
             }
 
             // 2. Actions
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp, start = 20.dp, end = 20.dp, bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 24.dp, end = 24.dp, bottom = 20.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 ActionItem(Icons.Outlined.Collections, "图片上传") { galleryLauncher.launch("image/*") }
                 ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") { }
                 ActionItem(Icons.Outlined.Groups, "群组") { }
@@ -135,57 +146,77 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
             }
 
             // 3. Bottom Container
-            Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
+            Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
-                        .animateContentSize(spring(stiffness = Spring.StiffnessLow)) // Content below follows smoothly
+                        .padding(horizontal = 16.dp)
+                        .verticalScroll(rememberScrollState())
+                        .animateContentSize(spring(stiffness = Spring.StiffnessMediumLow))
                 ) {
-                    // Header stays fixed outside pager
+                    Spacer(modifier = Modifier.height(20.dp))
                     CalendarHeader(currentMonth)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     
-                    // Only the Calendar card is swipable
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxWidth().wrapContentHeight(),
-                        verticalAlignment = Alignment.Top,
-                        beyondViewportPageCount = 1
-                    ) { page ->
-                        val month = initialMonth.plusMonths((page - initialPage).toLong())
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                            Surface(
+                    // --- 动态高度日历容器 ---
+                    // 计算每一行的大致高度 (基于屏幕宽度 - 边距)
+                    val config = LocalConfiguration.current
+                    val daySize = (config.screenWidthDp.dp - 32.dp - 24.dp) / 7
+                    val animatedCalendarHeight = (daySize * rowCount) + 32.dp + 28.dp // 32dp是padding, 28dp是星期Header和间距
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(animatedCalendarHeight) // 强制容器高度随行数变化
+                            .animateContentSize()
+                    ) {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.Top,
+                            beyondViewportPageCount = 1,
+                            pageSpacing = 16.dp
+                        ) { page ->
+                            val month = initialMonth.plusMonths((page - initialPage).toLong())
+                            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                            
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(0.96f)
-                                    .wrapContentHeight(),
-                                shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.dp
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        val scale = 1f - (abs(pageOffset) * 0.04f)
+                                        scaleX = scale
+                                        scaleY = scale
+                                        alpha = 1f - (abs(pageOffset) * 0.4f)
+                                    }, 
+                                contentAlignment = Alignment.TopCenter
                             ) {
-                                LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth().wrapContentHeight(),
+                                    shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.5.dp
+                                ) {
+                                    LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
+                                }
                             }
                         }
                     }
 
-                    // Schedule section outside pager, follows the card smoothly
+                    // 日程部分：减小顶部间距，紧跟日历
                     selectedDate?.let { date ->
                         ScheduleSection(date)
                     }
+                    
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
             }
         }
 
-        // --- FLOATING BUTTONS ---
-        Column(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            FloatingActionButton(onClick = { }, containerColor = Color.White, contentColor = IconColor, shape = RoundedCornerShape(16.dp), modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Default.CalendarMonth, null)
-            }
+        // Floating Buttons
+        Column(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            FloatingActionButton(onClick = { }, containerColor = Color.White, contentColor = IconColor, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(56.dp)) { Icon(Icons.Default.CalendarMonth, null) }
             FloatingActionButton(
                 onClick = { scope.launch { pagerState.animateScrollToPage(initialPage); selectedDate = LocalDate.now() } },
-                containerColor = Color.White, contentColor = CalendarSelectBlue, shape = RoundedCornerShape(16.dp), modifier = Modifier.size(56.dp)
+                containerColor = Color.White, contentColor = CalendarSelectBlue, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(56.dp)
             ) {
                 Text("今", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
@@ -197,53 +228,82 @@ fun HomeScreen(homeViewModel: HomeViewModel = viewModel()) {
 fun ScheduleSection(selectedDate: LocalDate) {
     val solar = remember(selectedDate) { Solar.fromYmd(selectedDate.year, selectedDate.monthValue, selectedDate.dayOfMonth) }
     val lunar = remember(solar) { solar.lunar }
+    
     val diff = ChronoUnit.DAYS.between(LocalDate.now(), selectedDate)
-    val prefix = when (diff) { 0L -> "今天"; 1L -> "明天"; 2L -> "后天"; -1L -> "昨天"; -2L -> "前天"; else -> if (diff > 0) "${diff}天后" else "${-diff}天前" }
-    val alias = when(lunar.month) { 1 -> "正月"; 11 -> "冬月"; 12 -> "腊月"; else -> null }
-    val lunarMonthStr = if (alias != null) "${lunar.monthInChinese}月($alias)" else "${lunar.monthInChinese}月"
+    val prefix = when (diff) {
+        0L -> "今天"
+        1L -> "明天"
+        2L -> "后天"
+        -1L -> "昨天"
+        -2L -> "前天"
+        else -> if (diff > 0) "${diff}天后" else "${-diff}天前"
+    }
+
+    val monthNum = abs(lunar.month)
+    val numericalMonthNames = listOf("", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二")
+    val numericalMonth = numericalMonthNames[monthNum] + "月"
+    
+    val alias = when(monthNum) {
+        1 -> "正月"
+        11 -> "冬月"
+        12 -> "腊月"
+        else -> null
+    }
+    val lunarMonthStr = if (alias != null) "$numericalMonth($alias)" else numericalMonth
     val dateStr = "$prefix 农历${lunarMonthStr}${lunar.dayInChinese}"
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 18.dp, start = 8.dp, end = 8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp, end = 4.dp)) {
         Text(
-            text = dateStr, fontSize = 15.sp, fontWeight = FontWeight.Normal, lineHeight = 16.sp, 
-            style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)), 
-            color = Color.Black, modifier = Modifier.padding(bottom = 16.dp)
+            text = dateStr,
+            fontSize = 16.sp, 
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF666666),
+            modifier = Modifier.padding(bottom = 12.dp)
         )
-        val schedules = listOf(ScheduleItem("全天", "5群海报设计", "工作", "来源: 5群"), ScheduleItem("14:00", "5群策划评审", "工作", "来源: 5群", hasWarning = true))
-        schedules.forEach { item -> ScheduleCard(item); Spacer(modifier = Modifier.height(12.dp)) }
+
+        val schedules = listOf(
+            ScheduleItem("全天", "5群海报设计", "工作", "来源: 5群"),
+            ScheduleItem("14:00", "5群策划评审", "工作", "来源: 5群", hasWarning = true)
+        )
+
+        schedules.forEach { item ->
+            ScheduleCard(item)
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }
 
 @Composable
 fun ScheduleCard(item: ScheduleItem) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.width(50.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.width(56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = item.time, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-            if (item.hasWarning) Icon(Icons.Default.Error, null, tint = WorkRed, modifier = Modifier.size(20.dp).padding(top = 4.dp))
+            if (item.hasWarning) Icon(Icons.Default.Error, null, tint = WorkRed, modifier = Modifier.size(18.dp).padding(top = 4.dp))
         }
-        Box(modifier = Modifier.width(2.dp).height(50.dp).background(CalendarSelectBlue.copy(alpha = 0.3f)))
-        Column(modifier = Modifier.padding(start = 16.dp).weight(1f)) {
+        Box(modifier = Modifier.width(2.5.dp).height(40.dp).background(CalendarSelectBlue.copy(alpha = 0.3f), CircleShape))
+        Column(modifier = Modifier.padding(start = 20.dp).weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(color = CalendarSelectBlue.copy(alpha = 0.1f), shape = RoundedCornerShape(8.dp)) {
+                Surface(color = CalendarSelectBlue.copy(alpha = 0.1f), shape = RoundedCornerShape(6.dp)) {
                     Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = item.category, fontSize = 12.sp, color = CalendarSelectBlue)
-                        Icon(Icons.Default.WorkOutline, null, tint = CalendarSelectBlue, modifier = Modifier.size(14.dp).padding(start = 4.dp))
+                        Text(text = item.category, fontSize = 11.sp, color = CalendarSelectBlue, fontWeight = FontWeight.Medium)
+                        Icon(Icons.Default.WorkOutline, null, tint = CalendarSelectBlue, modifier = Modifier.size(12.dp).padding(start = 2.dp))
                     }
                 }
-                Spacer(modifier = Modifier.width(8.dp)); Text(text = item.source, fontSize = 12.sp, color = Color.LightGray)
+                Spacer(modifier = Modifier.width(8.dp)); Text(text = item.source, fontSize = 12.sp, color = Color.Gray)
             }
-            Spacer(modifier = Modifier.height(4.dp)); Text(text = item.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            Spacer(modifier = Modifier.height(6.dp)); Text(text = item.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         }
     }
 }
 
 @Composable
 fun CalendarHeader(currentMonth: YearMonth) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.Menu, null, modifier = Modifier.size(28.dp), tint = Color.Black)
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Default.Menu, null, modifier = Modifier.size(26.dp), tint = Color.Black)
         Spacer(modifier = Modifier.weight(1f))
-        Text(currentMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-        Spacer(modifier = Modifier.weight(1f)); Box(modifier = Modifier.size(28.dp))
+        Text(currentMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Spacer(modifier = Modifier.weight(1f))
+        Box(modifier = Modifier.size(26.dp))
     }
 }
 
@@ -260,24 +320,29 @@ fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth, s
         days.map { date ->
             val solar = Solar.fromYmd(date.year, date.monthValue, date.dayOfMonth)
             val lunar = solar.lunar
-            val sf = solar.festivals; val lf = lunar.festivals; val of = lunar.otherFestivals; val jq = lunar.jieQi
-            val subText = when {
-                sf.isNotEmpty() -> sf[0]; lf.isNotEmpty() -> lf[0]; of.isNotEmpty() -> of[0]; jq.isNotEmpty() -> jq
-                lunar.day == 1 -> lunar.monthInChinese + "月"; else -> lunar.dayInChinese
+            val sf = solar.festivals; val lf = lunar.festivals; val of = lunar.otherFestivals; val jq = lunar.jieQi ?: ""
+            
+            val subText: String = when {
+                sf.isNotEmpty() -> sf[0]
+                lf.isNotEmpty() -> lf[0]
+                of.isNotEmpty() -> of[0]
+                jq.isNotEmpty() -> jq
+                lunar.day == 1 -> "${lunar.monthInChinese}月"
+                else -> lunar.dayInChinese
             }
             DayDisplayInfo(date, subText, date == LocalDate.now(), YearMonth.from(date) == currentMonth, holidayMap[date])
         }
     }
 
-    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp).fillMaxWidth()) {
+    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp).fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth()) {
             listOf("日", "一", "二", "三", "四", "五", "六").forEach {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(it, fontSize = 13.sp, color = Color(0xFF333333), fontWeight = FontWeight.Medium)
+                    Text(it, fontSize = 12.sp, color = Color(0xFF999999), fontWeight = FontWeight.Medium)
                 }
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         monthData.chunked(7).forEach { week ->
             if (week.any { it.isCurrentMonth }) {
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -300,12 +365,12 @@ fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (Loca
     ) {
         if (isSelected && info.isCurrentMonth) {
             if (info.isToday) {
-                Surface(modifier = Modifier.fillMaxSize(0.9f), shape = CircleShape, color = CalendarSelectBlue) {}
+                Surface(modifier = Modifier.fillMaxSize(0.85f), shape = CircleShape, color = CalendarSelectBlue) {}
             } else {
-                Surface(modifier = Modifier.fillMaxSize(0.9f), shape = CircleShape, border = BorderStroke(1.5.dp, CalendarSelectBlue), color = Color.Transparent) {}
+                Surface(modifier = Modifier.fillMaxSize(0.85f), shape = CircleShape, border = BorderStroke(1.5.dp, CalendarSelectBlue), color = Color.Transparent) {}
             }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Top) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             val textColor = when {
                 isSelected && info.isCurrentMonth && info.isToday -> Color.White
                 info.isToday && info.isCurrentMonth -> CalendarSelectBlue
@@ -313,9 +378,10 @@ fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (Loca
                 else -> Color(0xFF333333)
             }
             Text(
-                text = info.date.dayOfMonth.toString(), fontSize = 17.sp, fontWeight = FontWeight.Normal, lineHeight = 16.sp,
+                text = info.date.dayOfMonth.toString(), fontSize = 18.sp, fontWeight = FontWeight.SemiBold, lineHeight = 18.sp,
                 style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)), color = textColor
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = info.subText, fontSize = 10.sp, maxLines = 1, lineHeight = 10.sp,
                 style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
@@ -336,11 +402,11 @@ fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (Loca
 fun ActionItem(icon: ImageVector, label: String, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)) {
-        Surface(modifier = Modifier.size(56.dp), shape = RoundedCornerShape(12.dp), color = Color.White) {
-            Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = IconColor, modifier = Modifier.size(24.dp)) }
+        Surface(modifier = Modifier.size(54.dp), shape = RoundedCornerShape(14.dp), color = Color.White) {
+            Box(contentAlignment = Alignment.Center) { Icon(icon, label, tint = IconColor, modifier = Modifier.size(26.dp)) }
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = label, fontSize = 13.sp, color = TextTitle, fontWeight = FontWeight.Normal)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = label, fontSize = 13.sp, color = TextTitle, fontWeight = FontWeight.Medium)
     }
 }
 

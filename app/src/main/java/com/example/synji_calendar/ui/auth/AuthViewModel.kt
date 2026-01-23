@@ -1,78 +1,109 @@
 package com.example.synji_calendar.ui.auth
 
-import android.util.Log
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlin.random.Random
+import kotlinx.coroutines.launch
 
-data class AuthState(
+data class AuthUiState(
     val isLoggedIn: Boolean = false,
+    val token: String? = null,
     val phoneNumber: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
-    val generatedCode: String? = null
+    val user: UserInfo? = null,
+    val isCheckingToken: Boolean = true
 )
 
-class AuthViewModel : ViewModel() {
-    private val _authState = MutableStateFlow(AuthState())
-    val authState = _authState.asStateFlow()
+class AuthViewModel(application: Application) : AndroidViewModel(application) {
+    private val repository = AuthRepository()
+    private val sharedPrefs = application.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
+    
+    private val _uiState = MutableStateFlow(AuthUiState())
+    val uiState = _uiState.asStateFlow()
 
-    // 模拟已注册用户的数据库
-    private val registeredUsers = mutableSetOf<String>()
+    init {
+        checkPersistedToken()
+    }
+
+    /**
+     * 启动时检查本地是否存有 Token
+     */
+    private fun checkPersistedToken() {
+        val savedToken = sharedPrefs.getString("token", null)
+        if (savedToken != null) {
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(isCheckingToken = true)
+                val response = repository.getUserInfo(savedToken)
+                if (response.code == 200 && response.data != null) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoggedIn = true,
+                        token = savedToken,
+                        user = response.data,
+                        isCheckingToken = false
+                    )
+                } else {
+                    // Token 失效，清除本地存储
+                    sharedPrefs.edit().remove("token").apply()
+                    _uiState.value = _uiState.value.copy(isCheckingToken = false)
+                }
+            }
+        } else {
+            _uiState.value = _uiState.value.copy(isCheckingToken = false)
+        }
+    }
 
     fun sendVerificationCode(phone: String) {
         if (phone.length != 11) {
-            _authState.value = _authState.value.copy(error = "请输入正确的11位手机号")
+            _uiState.value = _uiState.value.copy(error = "请输入正确的11位手机号")
             return
         }
 
-        val code = (100000..999999).random().toString()
-        _authState.value = _authState.value.copy(
-            phoneNumber = phone,
-            generatedCode = code,
-            error = null
-        )
-        
-        // 在控制台模拟发送验证码
-        Log.d("AuthService", "========================================")
-        Log.d("AuthService", "【讯极日历】验证码发送成功！")
-        Log.d("AuthService", "手机号：$phone")
-        Log.d("AuthService", "验证码：$code")
-        Log.d("AuthService", "========================================")
-        
-        println("【模拟后端】向手机号 $phone 发送验证码: $code")
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            val response = repository.sendVerifyCode(phone)
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                phoneNumber = phone,
+                error = if (response.code != 200) response.message else null
+            )
+        }
     }
 
     fun login(phone: String, code: String) {
-        val currentCode = _authState.value.generatedCode
-        
-        if (currentCode == null) {
-            _authState.value = _authState.value.copy(error = "请先获取验证码")
-            return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            val response = repository.login(phone, code)
+            
+            if (response.code == 200 && response.data != null) {
+                // 保存 Token 到本地
+                sharedPrefs.edit().putString("token", response.data.token).apply()
+                
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isLoggedIn = true,
+                    token = response.data.token,
+                    user = response.data.user,
+                    error = null
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = response.message
+                )
+            }
         }
+    }
 
-        if (code != currentCode) {
-            _authState.value = _authState.value.copy(error = "验证码错误")
-            return
-        }
-
-        // 登录成功逻辑
-        val isNewUser = !registeredUsers.contains(phone)
-        if (isNewUser) {
-            registeredUsers.add(phone)
-            Log.d("AuthService", "新用户注册并登录：$phone")
-        } else {
-            Log.d("AuthService", "用户登录成功：$phone")
-        }
-
-        _authState.value = _authState.value.copy(
-            isLoggedIn = true,
-            error = null
-        )
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
     }
 
     fun logout() {
-        _authState.value = AuthState()
+        sharedPrefs.edit().remove("token").apply()
+        _uiState.value = AuthUiState(isCheckingToken = false)
     }
 }

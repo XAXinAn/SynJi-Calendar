@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -31,6 +30,7 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddScheduleScreen(
+    token: String,
     initialDate: LocalDate = LocalDate.now(),
     onBack: () -> Unit = {},
     homeViewModel: HomeViewModel = viewModel()
@@ -48,10 +48,10 @@ fun AddScheduleScreen(
     var showTimePicker by remember { mutableStateOf(false) }
     var isSelectingBelonging by remember { mutableStateOf(false) }
     
+    val isLoading by homeViewModel.isLoading.collectAsState()
     val sheetState = rememberModalBottomSheetState()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // 主内容页面
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
@@ -69,10 +69,12 @@ fun AddScheduleScreen(
                         }
                     },
                     actions = {
-                        TextButton(onClick = {
-                            if (title.isNotBlank()) {
+                        TextButton(
+                            enabled = !isLoading && title.isNotBlank(),
+                            onClick = {
                                 homeViewModel.addSchedule(
-                                    Schedule(
+                                    token = token,
+                                    schedule = Schedule(
                                         title = title,
                                         date = selectedDate,
                                         time = if (isAllDay) LocalTime.MIN else selectedTime,
@@ -80,17 +82,21 @@ fun AddScheduleScreen(
                                         location = location,
                                         belonging = selectedBelonging,
                                         isImportant = isImportant
-                                    )
+                                    ),
+                                    onComplete = onBack
                                 )
-                                onBack()
                             }
-                        }) {
-                            Text(
-                                "完成",
-                                color = CalendarSelectBlue,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = CalendarSelectBlue)
+                            } else {
+                                Text(
+                                    "完成",
+                                    color = if (title.isNotBlank()) CalendarSelectBlue else Color.Gray,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -119,13 +125,13 @@ fun AddScheduleScreen(
                         modifier = Modifier.padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Title Input
                         TextField(
                             value = title,
                             onValueChange = { title = it },
                             placeholder = { Text("请输入日程标题", color = Color.LightGray) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
+                            enabled = !isLoading,
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
@@ -139,7 +145,6 @@ fun AddScheduleScreen(
 
                         AddScheduleDivider()
 
-                        // All Day Toggle
                         Row(
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -151,6 +156,7 @@ fun AddScheduleScreen(
                             Switch(
                                 checked = isAllDay,
                                 onCheckedChange = { isAllDay = it },
+                                enabled = !isLoading,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = CalendarSelectBlue,
@@ -162,27 +168,24 @@ fun AddScheduleScreen(
                         }
                         AddScheduleDivider()
 
-                        // Date
                         AddEditRow(
                             Icons.Default.CalendarToday, 
                             "日期", 
                             selectedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")),
-                            onClick = { showDatePicker = true }
+                            onClick = { if (!isLoading) showDatePicker = true }
                         )
                         AddScheduleDivider()
                         
-                        // Time (Only show if not All Day)
                         if (!isAllDay) {
                             AddEditRow(
                                 Icons.Default.AccessTime, 
                                 "时间", 
                                 selectedTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-                                onClick = { showTimePicker = true }
+                                onClick = { if (!isLoading) showTimePicker = true }
                             )
                             AddScheduleDivider()
                         }
                         
-                        // Location Input
                         Row(
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -200,6 +203,7 @@ fun AddScheduleScreen(
                                     value = location,
                                     onValueChange = { location = it },
                                     modifier = Modifier.fillMaxWidth(),
+                                    enabled = !isLoading,
                                     textStyle = TextStyle(
                                         fontSize = 15.sp, 
                                         textAlign = TextAlign.End,
@@ -216,11 +220,10 @@ fun AddScheduleScreen(
                             Icons.Default.Groups, 
                             "归属", 
                             selectedBelonging,
-                            onClick = { isSelectingBelonging = true }
+                            onClick = { if (!isLoading) isSelectingBelonging = true }
                         )
                         AddScheduleDivider()
                         
-                        // Important Toggle
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -232,6 +235,7 @@ fun AddScheduleScreen(
                             Switch(
                                 checked = isImportant,
                                 onCheckedChange = { isImportant = it },
+                                enabled = !isLoading,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = CalendarSelectBlue,
@@ -246,7 +250,6 @@ fun AddScheduleScreen(
             }
         }
 
-        // 归属选择新界面 (Overlay)
         AnimatedVisibility(
             visible = isSelectingBelonging,
             enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)),
@@ -263,7 +266,6 @@ fun AddScheduleScreen(
         }
     }
 
-    // 日期选择器
     if (showDatePicker) {
         ModalBottomSheet(
             onDismissRequest = { showDatePicker = false },
@@ -283,7 +285,6 @@ fun AddScheduleScreen(
         }
     }
 
-    // 时间选择器
     if (showTimePicker) {
         ModalBottomSheet(
             onDismissRequest = { showTimePicker = false },
@@ -349,10 +350,4 @@ private fun AddEditRow(icon: ImageVector, label: String, value: String, onClick:
         )
         Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray, modifier = Modifier.size(20.dp))
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun AddSchedulePreview() {
-    AddScheduleScreen()
 }

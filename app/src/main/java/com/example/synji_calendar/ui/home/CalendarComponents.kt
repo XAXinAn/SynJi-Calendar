@@ -25,7 +25,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
 
-// --- 归属选择界面 ---
+// --- 统一归属选择界面 ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BelongingSelectionScreen(
@@ -95,7 +95,7 @@ fun BelongingSelectionScreen(
     }
 }
 
-// --- 日期选择器内容 ---
+// --- 统一日期选择器内容 ---
 @Composable
 fun WheelDatePickerContent(
     initialDate: LocalDate,
@@ -130,7 +130,7 @@ fun WheelDatePickerContent(
     }
 }
 
-// --- 时间选择器内容 ---
+// --- 统一时间选择器内容 ---
 @Composable
 fun WheelTimePickerContent(
     initialTime: LocalTime,

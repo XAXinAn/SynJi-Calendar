@@ -76,13 +76,19 @@ data class DayDisplayInfo(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    token: String,
     homeViewModel: HomeViewModel = viewModel(),
     onAddSchedule: (LocalDate) -> Unit = {},
     onEditSchedule: (Schedule) -> Unit = {}
 ) {
     val holidayMap by homeViewModel.holidays.collectAsState()
+    val monthDataMap by homeViewModel.currentMonthData.collectAsState()
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(token) {
+        if (token.isNotEmpty()) homeViewModel.refreshSchedules(token)
+    }
 
     val initialMonth = YearMonth.now()
     val pageCount = 20000
@@ -93,11 +99,17 @@ fun HomeScreen(
         initialMonth.plusMonths((pagerState.currentPage - initialPage).toLong())
     }
 
+    // 预加载当前月和相邻月数据到 ViewModel 缓存
+    LaunchedEffect(displayMonth) {
+        homeViewModel.getOrComputeMonthData(displayMonth)
+        homeViewModel.getOrComputeMonthData(displayMonth.plusMonths(1))
+        homeViewModel.getOrComputeMonthData(displayMonth.minusMonths(1))
+    }
+
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     var showWheelPicker by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
-    // 底部弹出滚轮选择器
     if (showWheelPicker) {
         ModalBottomSheet(
             onDismissRequest = { showWheelPicker = false },
@@ -111,9 +123,7 @@ fun HomeScreen(
                 onConfirm = { date ->
                     selectedDate = date
                     val targetPage = initialPage + ChronoUnit.MONTHS.between(initialMonth, YearMonth.from(date)).toInt()
-                    scope.launch { 
-                        pagerState.animateScrollToPage(targetPage)
-                    }
+                    scope.launch { pagerState.animateScrollToPage(targetPage) }
                     showWheelPicker = false
                 },
                 onCancel = { showWheelPicker = false }
@@ -121,7 +131,6 @@ fun HomeScreen(
         }
     }
 
-    // 同步高度逻辑
     fun getRowCount(month: YearMonth): Int {
         val firstDayOfWeek = month.atDay(1).dayOfWeek.value % 7
         val totalDays = month.lengthOfMonth()
@@ -144,17 +153,10 @@ fun HomeScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(brush = Brush.verticalGradient(listOf(BgGradientStart, BgGradientEnd), 0f, 1000f))
-        ) {
+        Column(modifier = Modifier.fillMaxSize().background(brush = Brush.verticalGradient(listOf(BgGradientStart, BgGradientEnd), 0f, 1000f))) {
             // 1. Search Bar
             Row(modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 20.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    modifier = Modifier.weight(1f).height(44.dp).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
-                    shape = RoundedCornerShape(22.dp), color = Color.White
-                ) {
+                Surface(modifier = Modifier.weight(1f).height(44.dp), shape = RoundedCornerShape(22.dp), color = Color.White) {
                     Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Search, null, tint = Color(0xFF888888), modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(10.dp))
@@ -166,13 +168,10 @@ fun HomeScreen(
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Surface(modifier = Modifier.size(40.dp), shape = CircleShape, color = IconColor) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                    }
+                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(24.dp)) }
                 }
             }
 
-            // 2. Actions
             Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 24.dp, end = 24.dp, bottom = 20.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 ActionItem(Icons.Outlined.Collections, "图片上传") { galleryLauncher.launch("image/*") }
                 ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") { }
@@ -180,97 +179,79 @@ fun HomeScreen(
                 ActionItem(Icons.Default.MoreVert, "更多") { }
             }
 
-            // 3. Bottom Container
             Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // --- FIXED YEAR/MONTH HEADER ---
                     Spacer(modifier = Modifier.height(20.dp))
                     Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                         CalendarHeader(displayMonth, onAddClick = { onAddSchedule(selectedDate ?: LocalDate.now()) })
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    // --- SCROLLABLE AREA ---
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 16.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
+                    Column(modifier = Modifier.weight(1f).padding(horizontal = 16.dp).verticalScroll(rememberScrollState())) {
                         val config = LocalConfiguration.current
                         val contentWidth = config.screenWidthDp.dp - 32.dp
                         val daySize = (contentWidth - 24.dp) / 7
                         val dynamicCalendarHeight = (daySize * interpolatedRowCount.toFloat().coerceAtLeast(1f)) + 20.dp + 32.dp + 12.dp
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(dynamicCalendarHeight)
-                        ) {
+                        Box(modifier = Modifier.fillMaxWidth().height(dynamicCalendarHeight)) {
                             HorizontalPager(
                                 state = pagerState,
                                 modifier = Modifier.fillMaxSize(),
                                 verticalAlignment = Alignment.Top,
-                                beyondViewportPageCount = 1,
+                                beyondViewportPageCount = 0, // 减少预加载负担
                                 pageSpacing = 16.dp
                             ) { page ->
                                 val month = initialMonth.plusMonths((page - initialPage).toLong())
-                                val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                                val data = monthDataMap[month] ?: emptyList()
                                 
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .graphicsLayer {
-                                            val scale = 1f - (abs(pageOffset) * 0.04f)
-                                            scaleX = scale
-                                            scaleY = scale
-                                            alpha = 1f - (abs(pageOffset) * 0.4f)
-                                        }, 
-                                    contentAlignment = Alignment.TopCenter
-                                ) {
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth().wrapContentHeight(),
-                                        shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.5.dp
-                                    ) {
-                                        LiveCalendar(holidayMap, month, selectedDate) { selectedDate = it }
+                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                                    Surface(modifier = Modifier.fillMaxWidth().wrapContentHeight(), shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 0.5.dp) {
+                                        if (data.isNotEmpty()) {
+                                            LiveCalendar(data, holidayMap, selectedDate) { selectedDate = it }
+                                        } else {
+                                            Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                                                CircularProgressIndicator(color = CalendarSelectBlue, modifier = Modifier.size(24.dp))
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-
-                        selectedDate?.let { date ->
-                            ScheduleSection(date, homeViewModel, onEditSchedule)
-                        }
-                        
+                        selectedDate?.let { ScheduleSection(it, homeViewModel, onEditSchedule) }
                         Spacer(modifier = Modifier.height(80.dp))
                     }
                 }
             }
         }
 
-        // Floating Buttons
         Column(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            FloatingActionButton(
-                onClick = { showWheelPicker = true },
-                containerColor = Color.White, 
-                contentColor = IconColor, 
-                shape = RoundedCornerShape(18.dp), 
-                modifier = Modifier.size(56.dp)
-            ) { Icon(Icons.Default.CalendarMonth, null) }
-            
-            FloatingActionButton(
-                onClick = { 
-                    scope.launch { 
-                        pagerState.animateScrollToPage(initialPage)
-                        selectedDate = LocalDate.now()
-                    } 
-                },
-                containerColor = Color.White, 
-                contentColor = CalendarSelectBlue, 
-                shape = RoundedCornerShape(18.dp), 
-                modifier = Modifier.size(56.dp)
-            ) {
-                Text("今", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            FloatingActionButton(onClick = { showWheelPicker = true }, containerColor = Color.White, contentColor = IconColor, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(56.dp)) { Icon(Icons.Default.CalendarMonth, null) }
+            FloatingActionButton(onClick = { scope.launch { pagerState.animateScrollToPage(initialPage); selectedDate = LocalDate.now() } }, containerColor = Color.White, contentColor = CalendarSelectBlue, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(56.dp)) { Text("今", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+@Composable
+fun LiveCalendar(monthData: List<DayDisplayInfo>, holidayMap: Map<LocalDate, Holiday>, selectedDate: LocalDate?, onDateSelected: (LocalDate) -> Unit) {
+    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp).fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            listOf("日", "一", "二", "三", "四", "五", "六").forEach {
+                Box(modifier = Modifier.weight(1f).height(20.dp), contentAlignment = Alignment.Center) {
+                    Text(it, fontSize = 12.sp, color = Color(0xFF999999), fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        monthData.chunked(7).forEach { week ->
+            if (week.any { it.isCurrentMonth }) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    week.forEach { info ->
+                        val infoWithHoliday = info.copy(holiday = holidayMap[info.date])
+                        Box(modifier = Modifier.weight(1f).aspectRatio(1f), contentAlignment = Alignment.Center) {
+                            CalendarDay(infoWithHoliday, info.date == selectedDate, onDateSelected)
+                        }
+                    }
+                }
             }
         }
     }
@@ -285,7 +266,6 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEdi
     
     val solar = remember(selectedDate) { Solar.fromYmd(selectedDate.year, selectedDate.monthValue, selectedDate.dayOfMonth) }
     val lunar = remember(solar) { solar.lunar }
-    
     val diff = ChronoUnit.DAYS.between(LocalDate.now(), selectedDate)
     val prefix = when (diff) {
         0L -> "今天"
@@ -295,33 +275,12 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEdi
         -2L -> "前天"
         else -> if (diff > 0) "${diff}天后" else "${-diff}天前"
     }
-
-    val monthNum = abs(lunar.month)
-    val numericalMonthNames = listOf("", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二")
-    val numericalMonth = numericalMonthNames[monthNum] + "月"
-    
-    val alias = when(monthNum) {
-        1 -> "正月"
-        11 -> "冬月"
-        12 -> "腊月"
-        else -> null
-    }
-    val lunarMonthStr = if (alias != null) "$numericalMonth($alias)" else numericalMonth
-    val dateStr = "$prefix 农历${lunarMonthStr}${lunar.dayInChinese}"
+    val dateStr = "$prefix 农历${lunar.monthInChinese}月${lunar.dayInChinese}"
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp, end = 4.dp)) {
-        Text(
-            text = dateStr,
-            fontSize = 16.sp, 
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFF666666),
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
+        Text(text = dateStr, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF666666), modifier = Modifier.padding(bottom = 12.dp))
         if (schedules.isEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                Text("暂无日程", color = Color.Gray, fontSize = 14.sp)
-            }
+            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) { Text("暂无日程", color = Color.Gray, fontSize = 14.sp) }
         } else {
             schedules.forEach { schedule ->
                 ScheduleCard(schedule, onClick = { onEditSchedule(schedule) })
@@ -333,111 +292,33 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEdi
 
 @Composable
 fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
-    // 竖线颜色：重要用红色，普通用深灰色 0xFF535353
     val accentColor = if (item.isImportant) WorkRed else Color(0xFF535353)
-    
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        color = Color.White,
-        shadowElevation = 0.5.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .height(IntrinsicSize.Min),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 左侧：时间区
-            Column(
-                modifier = Modifier.width(60.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = if (item.isAllDay) "全天" else item.time.format(DateTimeFormatter.ofPattern("HH:mm")),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = if (item.isAllDay) CalendarSelectBlue else Color.Black
-                )
+    Surface(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).clickable { onClick() }, shape = RoundedCornerShape(20.dp), color = Color.White, shadowElevation = 0.5.dp) {
+        Row(modifier = Modifier.padding(16.dp).height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.width(60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text(text = if (item.isAllDay) "全天" else item.time.format(DateTimeFormatter.ofPattern("HH:mm")), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (item.isAllDay) CalendarSelectBlue else Color.Black)
                 if (item.isImportant) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.Error,
-                        contentDescription = null,
-                        tint = WorkRed,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(imageVector = Icons.Default.Error, contentDescription = null, tint = WorkRed, modifier = Modifier.size(16.dp))
                 }
             }
-
             Spacer(modifier = Modifier.width(12.dp))
-
-            // 中间：全长线条 (颜色 0xFF535353 或 WorkRed)
-            Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .fillMaxHeight()
-                    .background(accentColor, CircleShape)
-            )
-
+            Box(modifier = Modifier.width(3.dp).fillMaxHeight().background(accentColor, CircleShape))
             Spacer(modifier = Modifier.width(16.dp))
-
-            // 右侧：内容区
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center
-            ) {
-                // 来源
-                Text(
-                    text = "来自 ${item.belonging}",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.Gray.copy(alpha = 0.7f),
-                    letterSpacing = 0.5.sp
-                )
-
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                Text(text = "来自 ${item.belonging}", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.Gray.copy(alpha = 0.7f), letterSpacing = 0.5.sp)
                 Spacer(modifier = Modifier.height(4.dp))
-
-                // 标题
-                Text(
-                    text = item.title,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black,
-                    lineHeight = 22.sp
-                )
-
-                // 地点
+                Text(text = item.title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.Black, lineHeight = 22.sp)
                 if (item.location.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = Color.LightGray,
-                            modifier = Modifier.size(14.dp)
-                        )
+                        Icon(imageVector = Icons.Default.LocationOn, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = item.location,
-                            fontSize = 13.sp,
-                            color = Color.Gray
-                        )
+                        Text(text = item.location, fontSize = 13.sp, color = Color.Gray)
                     }
                 }
             }
-            
-            // 右端引导图标
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = Color.LightGray.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
-            )
+            Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.LightGray.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -449,74 +330,16 @@ fun CalendarHeader(currentMonth: YearMonth, onAddClick: () -> Unit = {}) {
         Spacer(modifier = Modifier.weight(1f))
         Text(currentMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         Spacer(modifier = Modifier.weight(1f))
-        IconButton(onClick = onAddClick, modifier = Modifier.size(26.dp)) {
-            Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.Black)
-        }
-    }
-}
-
-@Composable
-fun LiveCalendar(holidayMap: Map<LocalDate, Holiday>, currentMonth: YearMonth, selectedDate: LocalDate?, onDateSelected: (LocalDate) -> Unit) {
-    val monthData = remember(currentMonth, holidayMap) {
-        val days = mutableListOf<LocalDate>()
-        val firstDayOfWeek = currentMonth.atDay(1).dayOfWeek.value % 7
-        val prevMonth = currentMonth.minusMonths(1)
-        for (i in firstDayOfWeek - 1 downTo 0) days.add(prevMonth.atDay(prevMonth.lengthOfMonth() - i))
-        for (i in 1..currentMonth.lengthOfMonth()) days.add(currentMonth.atDay(i))
-        while (days.size < 42) days.add(currentMonth.plusMonths(1).atDay(days.size - firstDayOfWeek - currentMonth.lengthOfMonth() + 1))
-        
-        days.map { date ->
-            val solar = Solar.fromYmd(date.year, date.monthValue, date.dayOfMonth)
-            val lunar = solar.lunar
-            val sf = solar.festivals; val lf = lunar.festivals; val of = lunar.otherFestivals; val jq = lunar.jieQi ?: ""
-            
-            val subText: String = when {
-                sf.isNotEmpty() -> sf[0]
-                lf.isNotEmpty() -> lf[0]
-                of.isNotEmpty() -> of[0]
-                jq.isNotEmpty() -> jq
-                lunar.day == 1 -> "${lunar.monthInChinese}月"
-                else -> lunar.dayInChinese
-            }
-            DayDisplayInfo(date, subText, date == LocalDate.now(), YearMonth.from(date) == currentMonth, holidayMap[date])
-        }
-    }
-
-    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp).fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            listOf("日", "一", "二", "三", "四", "五", "六").forEach {
-                Box(modifier = Modifier.weight(1f).height(20.dp), contentAlignment = Alignment.Center) {
-                    Text(it, fontSize = 12.sp, color = Color(0xFF999999), fontWeight = FontWeight.Medium)
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        monthData.chunked(7).forEach { week ->
-            if (week.any { it.isCurrentMonth }) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    week.forEach { info ->
-                        Box(modifier = Modifier.weight(1f).aspectRatio(1f), contentAlignment = Alignment.Center) {
-                            CalendarDay(info, info.date == selectedDate, onDateSelected)
-                        }
-                    }
-                }
-            }
-        }
+        IconButton(onClick = onAddClick, modifier = Modifier.size(26.dp)) { Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.Black) }
     }
 }
 
 @Composable
 fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (LocalDate) -> Unit) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = info.isCurrentMonth) { onDateSelected(info.date) }
-    ) {
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = info.isCurrentMonth) { onDateSelected(info.date) }) {
         if (isSelected && info.isCurrentMonth) {
-            if (info.isToday) {
-                Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = CalendarSelectBlue) {}
-            } else {
-                Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, border = BorderStroke(1.5.dp, CalendarSelectBlue), color = Color.Transparent) {}
-            }
+            if (info.isToday) Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, color = CalendarSelectBlue) {}
+            else Surface(modifier = Modifier.fillMaxSize(), shape = CircleShape, border = BorderStroke(1.5.dp, CalendarSelectBlue), color = Color.Transparent) {}
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             val textColor = when {
@@ -525,27 +348,12 @@ fun CalendarDay(info: DayDisplayInfo, isSelected: Boolean, onDateSelected: (Loca
                 !info.isCurrentMonth -> Color.LightGray
                 else -> Color(0xFF333333)
             }
-            Text(
-                text = info.date.dayOfMonth.toString(), 
-                fontSize = 18.sp, 
-                fontWeight = FontWeight.Normal,
-                lineHeight = 18.sp,
-                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)), 
-                color = textColor
-            )
+            Text(text = info.date.dayOfMonth.toString(), fontSize = 18.sp, fontWeight = FontWeight.Normal, lineHeight = 18.sp, style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)), color = textColor)
             Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = info.subText, fontSize = 10.sp, maxLines = 1, lineHeight = 10.sp,
-                style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)),
-                color = if (textColor == Color.White) Color.White else (if (info.isToday && !isSelected) CalendarSelectBlue else Color(0xFF999999))
-            )
+            Text(text = info.subText, fontSize = 10.sp, maxLines = 1, lineHeight = 10.sp, style = TextStyle(platformStyle = PlatformTextStyle(includeFontPadding = false)), color = if (textColor == Color.White) Color.White else (if (info.isToday && !isSelected) CalendarSelectBlue else Color(0xFF999999)))
         }
         if (info.isCurrentMonth && info.holiday != null) {
-            Text(
-                text = if (info.holiday.isRest) "休" else "班", fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                color = if (isSelected && info.isToday) Color.White else (if (info.holiday.isRest) RestBlue else WorkRed),
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp)
-            )
+            Text(text = if (info.holiday.isRest) "休" else "班", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = if (isSelected && info.isToday) Color.White else (if (info.holiday.isRest) RestBlue else WorkRed), modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp))
         }
     }
 }
@@ -564,4 +372,4 @@ fun ActionItem(icon: ImageVector, label: String, onClick: () -> Unit) {
 
 @Preview(showBackground = true)
 @Composable
-fun HomeScreenPreview() { HomeScreen() }
+fun HomeScreenPreview() { HomeScreen(token = "") }

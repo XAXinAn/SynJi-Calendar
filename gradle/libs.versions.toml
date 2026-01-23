@@ -11,6 +11,7 @@ composeBom = "2024.09.00"
 lunar = "1.7.7"
 biweekly = "0.6.7"
 okhttp = "4.12.0"
+gson = "2.10.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -32,6 +33,7 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 lunar-java = { group = "cn.6tail", name = "lunar", version.ref = "lunar" }
 biweekly = { group = "net.sf.biweekly", name = "biweekly", version.ref = "biweekly" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

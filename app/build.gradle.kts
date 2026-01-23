@@ -53,10 +53,11 @@ dependencies {
     // ViewModel compose integration
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     
-    // Add lunar-java, biweekly, and okhttp
+    // Add lunar-java, biweekly, okhttp, and gson
     implementation(libs.lunar.java)
     implementation(libs.biweekly)
     implementation(libs.okhttp)
+    implementation(libs.gson)
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

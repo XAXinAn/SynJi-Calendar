@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -31,6 +30,7 @@ import java.time.format.DateTimeFormatter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleDetailScreen(
+    token: String,
     schedule: Schedule,
     onBack: () -> Unit = {},
     homeViewModel: HomeViewModel = viewModel()
@@ -48,6 +48,7 @@ fun ScheduleDetailScreen(
     var showTimePicker by remember { mutableStateOf(false) }
     var isSelectingBelonging by remember { mutableStateOf(false) }
     
+    val isLoading by homeViewModel.isLoading.collectAsState()
     val sheetState = rememberModalBottomSheetState()
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -63,21 +64,28 @@ fun ScheduleDetailScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = onBack, enabled = !isLoading) {
                             Icon(Icons.Default.ChevronLeft, "Back", modifier = Modifier.size(32.dp), tint = IconColor)
                         }
                     },
                     actions = {
-                        IconButton(onClick = {
-                            homeViewModel.deleteSchedule(schedule)
-                            onBack()
-                        }) {
+                        IconButton(
+                            enabled = !isLoading,
+                            onClick = {
+                                // 修正：安全调用 nullable ID
+                                schedule.id?.let { id ->
+                                    homeViewModel.deleteSchedule(token, id, onComplete = onBack)
+                                }
+                            }
+                        ) {
                             Icon(Icons.Default.DeleteOutline, "Delete", tint = Color.Gray.copy(alpha = 0.7f))
                         }
-                        TextButton(onClick = {
-                            if (title.isNotBlank()) {
+                        TextButton(
+                            enabled = !isLoading && title.isNotBlank(),
+                            onClick = {
                                 homeViewModel.updateSchedule(
-                                    schedule.copy(
+                                    token = token,
+                                    updatedSchedule = schedule.copy(
                                         title = title,
                                         date = selectedDate,
                                         time = if (isAllDay) LocalTime.MIN else selectedTime,
@@ -85,17 +93,21 @@ fun ScheduleDetailScreen(
                                         location = location,
                                         belonging = selectedBelonging,
                                         isImportant = isImportant
-                                    )
+                                    ),
+                                    onComplete = onBack
                                 )
-                                onBack()
                             }
-                        }) {
-                            Text(
-                                "完成",
-                                color = CalendarSelectBlue,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = CalendarSelectBlue)
+                            } else {
+                                Text(
+                                    "完成",
+                                    color = if (title.isNotBlank()) CalendarSelectBlue else Color.Gray,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -124,13 +136,13 @@ fun ScheduleDetailScreen(
                         modifier = Modifier.padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Title Input
                         TextField(
                             value = title,
                             onValueChange = { title = it },
                             placeholder = { Text("请输入日程标题", color = Color.LightGray) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
+                            enabled = !isLoading,
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
@@ -144,7 +156,6 @@ fun ScheduleDetailScreen(
 
                         DetailDivider()
 
-                        // All Day Toggle
                         Row(
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -156,6 +167,7 @@ fun ScheduleDetailScreen(
                             Switch(
                                 checked = isAllDay,
                                 onCheckedChange = { isAllDay = it },
+                                enabled = !isLoading,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = CalendarSelectBlue,
@@ -167,27 +179,24 @@ fun ScheduleDetailScreen(
                         }
                         DetailDivider()
 
-                        // Date
                         DetailEditRow(
                             Icons.Default.CalendarToday, 
                             "日期", 
                             selectedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")),
-                            onClick = { showDatePicker = true }
+                            onClick = { if (!isLoading) showDatePicker = true }
                         )
                         DetailDivider()
                         
-                        // Time (Only show if not All Day)
                         if (!isAllDay) {
                             DetailEditRow(
                                 Icons.Default.AccessTime, 
                                 "时间", 
                                 selectedTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-                                onClick = { showTimePicker = true }
+                                onClick = { if (!isLoading) showTimePicker = true }
                             )
                             DetailDivider()
                         }
                         
-                        // Location Input
                         Row(
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -205,6 +214,7 @@ fun ScheduleDetailScreen(
                                     value = location,
                                     onValueChange = { location = it },
                                     modifier = Modifier.fillMaxWidth(),
+                                    enabled = !isLoading,
                                     textStyle = TextStyle(
                                         fontSize = 15.sp, 
                                         textAlign = TextAlign.End,
@@ -221,11 +231,10 @@ fun ScheduleDetailScreen(
                             Icons.Default.Groups, 
                             "归属", 
                             selectedBelonging,
-                            onClick = { isSelectingBelonging = true }
+                            onClick = { if (!isLoading) isSelectingBelonging = true }
                         )
                         DetailDivider()
                         
-                        // Important Toggle
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -237,6 +246,7 @@ fun ScheduleDetailScreen(
                             Switch(
                                 checked = isImportant,
                                 onCheckedChange = { isImportant = it },
+                                enabled = !isLoading,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = CalendarSelectBlue,
@@ -251,7 +261,6 @@ fun ScheduleDetailScreen(
             }
         }
 
-        // 归属选择新界面 (Overlay)
         AnimatedVisibility(
             visible = isSelectingBelonging,
             enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)),
@@ -268,7 +277,6 @@ fun ScheduleDetailScreen(
         }
     }
 
-    // 日期选择器
     if (showDatePicker) {
         ModalBottomSheet(
             onDismissRequest = { showDatePicker = false },
@@ -288,7 +296,6 @@ fun ScheduleDetailScreen(
         }
     }
 
-    // 时间选择器
     if (showTimePicker) {
         ModalBottomSheet(
             onDismissRequest = { showTimePicker = false },

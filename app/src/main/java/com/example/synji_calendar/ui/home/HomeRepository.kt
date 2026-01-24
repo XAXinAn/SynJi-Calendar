@@ -56,6 +56,20 @@ class HomeRepository {
         executeRequest(request, type)
     }
 
+    /**
+     * 将 OCR 提取的原始文本发送给后端大模型进行语义解析，返回结构化的日程对象
+     */
+    suspend fun parseScheduleWithAi(token: String, text: String): ApiResponse<Schedule> = withContext(Dispatchers.IO) {
+        val requestBody = gson.toJson(mapOf("text" to text)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$baseUrl/api/schedule/ai-parse")
+            .post(requestBody)
+            .header("Authorization", token)
+            .build()
+        val type = object : TypeToken<ApiResponse<Schedule>>() {}.type
+        executeRequest(request, type)
+    }
+
     suspend fun updateSchedule(token: String, schedule: Schedule): ApiResponse<Unit> = withContext(Dispatchers.IO) {
         val requestBody = gson.toJson(schedule).toRequestBody(jsonMediaType)
         val request = Request.Builder()

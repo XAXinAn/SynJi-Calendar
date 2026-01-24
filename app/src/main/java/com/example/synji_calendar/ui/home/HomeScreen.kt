@@ -3,9 +3,6 @@ package com.example.synji_calendar.ui.home
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,7 +20,6 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -36,9 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nlf.calendar.Solar
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
@@ -83,8 +80,40 @@ fun HomeScreen(
 ) {
     val holidayMap by homeViewModel.holidays.collectAsState()
     val monthDataMap by homeViewModel.currentMonthData.collectAsState()
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { }
+    val isLoading by homeViewModel.isLoading.collectAsState()
+    val ocrResult by homeViewModel.ocrResult.collectAsState()
+    
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // OCR 测试对话框
+    if (ocrResult.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { homeViewModel.clearOcrResult() },
+            title = { Text("OCR 识别测试结果") },
+            text = { 
+                Box(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                    Text(ocrResult) 
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { homeViewModel.clearOcrResult() }) {
+                    Text("关闭并继续AI解析")
+                }
+            }
+        )
+    }
+
+    // 监听 ViewModel 消息
+    LaunchedEffect(Unit) {
+        homeViewModel.message.collectLatest { msg ->
+            snackbarHostState.showSnackbar(msg)
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let { homeViewModel.performAutoScheduleFromImage(token, it) }
+    }
 
     LaunchedEffect(token) {
         if (token.isNotEmpty()) homeViewModel.refreshSchedules(token)
@@ -99,7 +128,6 @@ fun HomeScreen(
         initialMonth.plusMonths((pagerState.currentPage - initialPage).toLong())
     }
 
-    // 预加载当前月和相邻月数据到 ViewModel 缓存
     LaunchedEffect(displayMonth) {
         homeViewModel.getOrComputeMonthData(displayMonth)
         homeViewModel.getOrComputeMonthData(displayMonth.plusMonths(1))
@@ -176,7 +204,7 @@ fun HomeScreen(
                 ActionItem(Icons.Outlined.Collections, "图片上传") { galleryLauncher.launch("image/*") }
                 ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") { }
                 ActionItem(Icons.Outlined.Groups, "群组") { }
-                ActionItem(Icons.Default.MoreVert, "更多") { }
+                ActionItem(Icons.Default.Add, "更多") { }
             }
 
             Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)) {
@@ -198,7 +226,7 @@ fun HomeScreen(
                                 state = pagerState,
                                 modifier = Modifier.fillMaxSize(),
                                 verticalAlignment = Alignment.Top,
-                                beyondViewportPageCount = 0, // 减少预加载负担
+                                beyondViewportPageCount = 0,
                                 pageSpacing = 16.dp
                             ) { page ->
                                 val month = initialMonth.plusMonths((page - initialPage).toLong())
@@ -224,10 +252,18 @@ fun HomeScreen(
             }
         }
 
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White)
+            }
+        }
+
         Column(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             FloatingActionButton(onClick = { showWheelPicker = true }, containerColor = Color.White, contentColor = IconColor, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(56.dp)) { Icon(Icons.Default.CalendarMonth, null) }
             FloatingActionButton(onClick = { scope.launch { pagerState.animateScrollToPage(initialPage); selectedDate = LocalDate.now() } }, containerColor = Color.White, contentColor = CalendarSelectBlue, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(56.dp)) { Text("今", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
         }
+        
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 
@@ -308,7 +344,6 @@ fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
                 .height(IntrinsicSize.Min),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 时间展示区域
             Column(
                 modifier = Modifier.width(60.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -332,7 +367,6 @@ fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
             
             Spacer(modifier = Modifier.width(12.dp))
             
-            // 垂直指示条
             Box(
                 modifier = Modifier
                     .width(4.dp)
@@ -343,13 +377,11 @@ fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
             
             Spacer(modifier = Modifier.width(16.dp))
             
-            // 内容区域
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 归属标签
                     Surface(
                         color = accentColor.copy(alpha = 0.1f),
                         shape = RoundedCornerShape(6.dp)

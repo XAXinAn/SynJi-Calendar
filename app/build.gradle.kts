@@ -16,6 +16,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        ndk {
+            abiFilters.add("arm64-v8a")
+            abiFilters.add("armeabi-v7a")
+            abiFilters.add("x86_64")
+        }
     }
 
     buildTypes {
@@ -37,6 +43,14 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        jniLibs {
+            pickFirsts += "lib/**/libonnxruntime.so"
+        }
+    }
 }
 
 dependencies {
@@ -49,15 +63,18 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
-    
-    // ViewModel compose integration
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     
-    // Add lunar-java, biweekly, okhttp, and gson
     implementation(libs.lunar.java)
     implementation(libs.biweekly)
     implementation(libs.okhttp)
     implementation(libs.gson)
+
+    // 🟢 引入本地 AAR 库
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+    
+    // 🟢 底层 ONNX 引擎
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.14.0")
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

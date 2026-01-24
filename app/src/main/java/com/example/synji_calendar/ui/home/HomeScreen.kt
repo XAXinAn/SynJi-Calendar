@@ -292,7 +292,31 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEdi
         -2L -> "前天"
         else -> if (diff > 0) "${diff}天后" else "${-diff}天前"
     }
-    val dateStr = "$prefix 农历${lunar.monthInChinese}月${lunar.dayInChinese}"
+
+    // 格式化农历月份展示
+    val monthInt = kotlin.math.abs(lunar.month)
+    val chineseMonthDigits = when(monthInt) {
+        1 -> "一"
+        2 -> "二"
+        3 -> "三"
+        4 -> "四"
+        5 -> "五"
+        6 -> "六"
+        7 -> "七"
+        8 -> "八"
+        9 -> "九"
+        10 -> "十"
+        11 -> "十一"
+        12 -> "十二"
+        else -> ""
+    }
+    val alias = when(monthInt) {
+        1 -> "(正月)"
+        11 -> "(冬月)"
+        12 -> "(腊月)"
+        else -> ""
+    }
+    val dateStr = "$prefix 农历${chineseMonthDigits}月${alias}${lunar.dayInChinese}"
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp, end = 4.dp)) {
         Text(text = dateStr, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF666666), modifier = Modifier.padding(bottom = 12.dp))

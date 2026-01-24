@@ -1,5 +1,6 @@
 package com.example.synji_calendar.ui.home
 
+import android.util.Log
 import com.example.synji_calendar.ui.auth.ApiResponse
 import com.google.gson.*
 import com.google.gson.reflect.TypeToken
@@ -16,7 +17,26 @@ import java.time.format.DateTimeFormatter
 class HomeRepository {
     private val client = OkHttpClient()
     
-    // 统一配置支持 Java 8 时间类的 Gson
+    // 自定义防御性解析器
+    private val scheduleAdapter = JsonDeserializer<Schedule> { json, _, context ->
+        try {
+            val obj = json.asJsonObject
+            Schedule(
+                id = if (obj.has("id") && !obj.get("id").isJsonNull) obj.get("id").asLong else null,
+                title = if (obj.has("title") && !obj.get("title").isJsonNull) obj.get("title").asString else "未命名日程",
+                date = context.deserialize(obj.get("date"), LocalDate::class.java),
+                time = if (obj.has("time") && !obj.get("time").isJsonNull) context.deserialize(obj.get("time"), LocalTime::class.java) else LocalTime.of(0, 0, 0),
+                isAllDay = if (obj.has("isAllDay") && !obj.get("isAllDay").isJsonNull) obj.get("isAllDay").asBoolean else false,
+                location = if (obj.has("location") && !obj.get("location").isJsonNull) obj.get("location").asString else null,
+                belonging = if (obj.has("belonging") && !obj.get("belonging").isJsonNull) obj.get("belonging").asString else "默认",
+                isImportant = if (obj.has("important") && !obj.get("important").isJsonNull) obj.get("important").asBoolean else false,
+                notes = if (obj.has("notes") && !obj.get("notes").isJsonNull) obj.get("notes").asString else null
+            )
+        } catch (e: Exception) {
+            Schedule(title = "解析异常", date = LocalDate.now())
+        }
+    }
+
     private val gson = GsonBuilder()
         .registerTypeAdapter(LocalDate::class.java, JsonSerializer<LocalDate> { src, _, _ ->
             JsonPrimitive(src.format(DateTimeFormatter.ISO_LOCAL_DATE))
@@ -30,65 +50,58 @@ class HomeRepository {
         .registerTypeAdapter(LocalTime::class.java, JsonDeserializer { json, _, _ ->
             LocalTime.parse(json.asString)
         })
+        .registerTypeAdapter(Schedule::class.java, scheduleAdapter)
         .create()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    private val baseUrl = "http://192.168.0.102:8080"
+    private val baseUrl = "http://192.168.0.105:8080"
+
+    suspend fun ping(): ApiResponse<String> = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url("$baseUrl/api/ping").get().build()
+        executeRequest(request, object : TypeToken<ApiResponse<String>>() {}.type)
+    }
 
     suspend fun fetchSchedules(token: String): ApiResponse<List<Schedule>> = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url("$baseUrl/api/schedule/list")
-            .get()
-            .header("Authorization", token)
-            .build()
-        val type = object : TypeToken<ApiResponse<List<Schedule>>>() {}.type
-        executeRequest(request, type)
+        val request = Request.Builder().url("$baseUrl/api/schedule/list").get().header("Authorization", token).build()
+        executeRequest(request, object : TypeToken<ApiResponse<List<Schedule>>>() {}.type)
     }
 
     suspend fun addSchedule(token: String, schedule: Schedule): ApiResponse<Unit> = withContext(Dispatchers.IO) {
         val requestBody = gson.toJson(schedule).toRequestBody(jsonMediaType)
-        val request = Request.Builder()
-            .url("$baseUrl/api/schedule/add")
-            .post(requestBody)
-            .header("Authorization", token)
-            .build()
-        val type = object : TypeToken<ApiResponse<Unit>>() {}.type
-        executeRequest(request, type)
+        val request = Request.Builder().url("$baseUrl/api/schedule/add").post(requestBody).header("Authorization", token).build()
+        executeRequest(request, object : TypeToken<ApiResponse<Unit>>() {}.type)
     }
 
     /**
-     * 将 OCR 提取的原始文本发送给后端大模型进行语义解析，返回结构化的日程对象
+     * 对齐文档 3.3：AI 解析返回 Schedule 对象数组
      */
-    suspend fun parseScheduleWithAi(token: String, text: String): ApiResponse<Schedule> = withContext(Dispatchers.IO) {
+    suspend fun parseScheduleWithAi(token: String, text: String): ApiResponse<List<Schedule>> = withContext(Dispatchers.IO) {
         val requestBody = gson.toJson(mapOf("text" to text)).toRequestBody(jsonMediaType)
-        val request = Request.Builder()
-            .url("$baseUrl/api/schedule/ai-parse")
-            .post(requestBody)
-            .header("Authorization", token)
-            .build()
-        val type = object : TypeToken<ApiResponse<Schedule>>() {}.type
-        executeRequest(request, type)
+        val request = Request.Builder().url("$baseUrl/api/schedule/ai-parse").post(requestBody).header("Authorization", token).build()
+        
+        try {
+            client.newCall(request).execute().use { response ->
+                val bodyString = response.body?.string() ?: ""
+                Log.d("HomeRepository", "AI Parse Raw Response: $bodyString")
+                
+                // 对齐文档：响应 data 是一个数组
+                val type = object : TypeToken<ApiResponse<List<Schedule>>>() {}.type
+                gson.fromJson<ApiResponse<List<Schedule>>>(bodyString, type)
+            }
+        } catch (e: Exception) {
+            ApiResponse(500, "AI解析异常: ${e.message}", null)
+        }
     }
 
     suspend fun updateSchedule(token: String, schedule: Schedule): ApiResponse<Unit> = withContext(Dispatchers.IO) {
         val requestBody = gson.toJson(schedule).toRequestBody(jsonMediaType)
-        val request = Request.Builder()
-            .url("$baseUrl/api/schedule/update")
-            .put(requestBody)
-            .header("Authorization", token)
-            .build()
-        val type = object : TypeToken<ApiResponse<Unit>>() {}.type
-        executeRequest(request, type)
+        val request = Request.Builder().url("$baseUrl/api/schedule/update").put(requestBody).header("Authorization", token).build()
+        executeRequest(request, object : TypeToken<ApiResponse<Unit>>() {}.type)
     }
 
     suspend fun deleteSchedule(token: String, scheduleId: Long): ApiResponse<Unit> = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url("$baseUrl/api/schedule/delete/$scheduleId")
-            .delete()
-            .header("Authorization", token)
-            .build()
-        val type = object : TypeToken<ApiResponse<Unit>>() {}.type
-        executeRequest(request, type)
+        val request = Request.Builder().url("$baseUrl/api/schedule/delete/$scheduleId").delete().header("Authorization", token).build()
+        executeRequest(request, object : TypeToken<ApiResponse<Unit>>() {}.type)
     }
 
     private fun <T> executeRequest(request: Request, responseType: java.lang.reflect.Type): ApiResponse<T> {

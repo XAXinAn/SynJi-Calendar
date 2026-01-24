@@ -23,17 +23,18 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
 
+// 对齐文档 3.2：除了 location 和 notes 外均设为非空，并配置默认值
 data class Schedule(
     val id: Long? = null, 
     val title: String,
     val date: LocalDate,
-    val time: LocalTime = LocalTime.now(),
+    val time: LocalTime = LocalTime.of(0, 0, 0),
     val isAllDay: Boolean = false,
-    val location: String = "",
-    val belonging: String = "个人",
+    val location: String? = null, 
+    val belonging: String = "默认", 
     @SerializedName("important")
     val isImportant: Boolean = false,
-    val notes: String = ""
+    val notes: String? = null 
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,10 +49,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
+    // 加载进度描述
+    private val _loadingMessage = MutableStateFlow("")
+    val loadingMessage = _loadingMessage.asStateFlow()
+
     private val _message = MutableSharedFlow<String>()
     val message = _message.asSharedFlow()
 
-    // 重新添加丢失的 OCR 相关状态
     private val _ocrResult = MutableStateFlow("")
     val ocrResult = _ocrResult.asStateFlow()
 
@@ -62,7 +66,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadHolidays()
         getOrComputeMonthData(YearMonth.now())
-        // 初始化 OCR 引擎
         viewModelScope.launch(Dispatchers.IO) {
             OcrEngine.init(getApplication())
         }
@@ -99,24 +102,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (token.isEmpty()) return
         viewModelScope.launch {
             _isLoading.value = true
+            _loadingMessage.value = "正在同步日程..."
             val response = repository.fetchSchedules(token)
             if (response.code == 200 && response.data != null) {
                 _schedules.value = response.data
+                Log.d("HomeViewModel", "成功接收结构化数据(列表): ${response.data.size} 条日程")
             }
             _isLoading.value = false
+        }
+    }
+
+    /**
+     * 内部使用的挂起函数：添加单条日程，不带 Scope
+     */
+    private suspend fun addSingleScheduleInternal(token: String, schedule: Schedule): Boolean {
+        val response = repository.addSchedule(token, schedule.copy(id = null))
+        return if (response.code == 200) {
+            true
+        } else {
+            _message.emit("添加失败(${schedule.title}): ${response.message}")
+            false
         }
     }
 
     fun addSchedule(token: String, schedule: Schedule, onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             _isLoading.value = true
-            val response = repository.addSchedule(token, schedule.copy(id = null))
-            if (response.code == 200) {
+            _loadingMessage.value = "正在保存日程..."
+            if (addSingleScheduleInternal(token, schedule)) {
                 refreshSchedules(token)
                 _message.emit("日程添加成功")
                 onComplete()
             } else {
-                _message.emit("添加失败: ${response.message}")
                 _isLoading.value = false
             }
         }
@@ -125,6 +142,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteSchedule(token: String, scheduleId: Long, onComplete: () -> Unit) {
         viewModelScope.launch {
             _isLoading.value = true
+            _loadingMessage.value = "正在删除..."
             val response = repository.deleteSchedule(token, scheduleId)
             if (response.code == 200) {
                 refreshSchedules(token)
@@ -136,6 +154,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun updateSchedule(token: String, updatedSchedule: Schedule, onComplete: () -> Unit) {
         viewModelScope.launch {
             _isLoading.value = true
+            _loadingMessage.value = "正在更新..."
             val response = repository.updateSchedule(token, updatedSchedule)
             if (response.code == 200) {
                 refreshSchedules(token)
@@ -149,13 +168,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * 全自动流程：OCR 识别 -> AI 解析 -> 自动存入日程
+     * 全自动流程：对齐文档 3.3，支持遍历解析到的日程列表
      */
     fun performAutoScheduleFromImage(token: String, uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             try {
-                // 1. OCR 识别
+                // 1. 读取图片
+                _loadingMessage.value = "正在处理图片..."
                 val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     ImageDecoder.decodeBitmap(ImageDecoder.createSource(getApplication<Application>().contentResolver, uri)) { decoder, _, _ ->
                         decoder.isMutableRequired = true
@@ -164,6 +184,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     MediaStore.Images.Media.getBitmap(getApplication<Application>().contentResolver, uri)
                 }
 
+                // 2. OCR 识别
+                _loadingMessage.value = "正在识别文字..."
                 val extractedText = OcrEngine.recognize(bitmap)
                 if (extractedText.isEmpty()) {
                     _message.emit("未识别到文字，请确保图片清晰")
@@ -171,21 +193,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                // 显示 OCR 识别内容对话框
-                withContext(Dispatchers.Main) {
-                    _ocrResult.value = extractedText
-                }
-
-                Log.d("HomeViewModel", "Extracted Text: $extractedText")
-
-                // 2. AI 解析文本
+                // 3. AI 解析
+                _loadingMessage.value = "AI 正在理解内容..."
                 val aiResponse = repository.parseScheduleWithAi(token, extractedText)
                 if (aiResponse.code == 200 && aiResponse.data != null) {
-                    val structuredSchedule = aiResponse.data
-                    Log.d("HomeViewModel", "AI Parsed Schedule: $structuredSchedule")
+                    val schedules = aiResponse.data
+                    Log.d("HomeViewModel", "AI 解析成功，发现 ${schedules.size} 条日程")
                     
-                    // 3. 自动添加日程
-                    addSchedule(token, structuredSchedule)
+                    // 4. 自动遍历添加
+                    var successCount = 0
+                    schedules.forEachIndexed { index, schedule ->
+                        _loadingMessage.value = "正在存入第 ${index + 1}/${schedules.size} 条日程..."
+                        if (addSingleScheduleInternal(token, schedule)) {
+                            successCount++
+                        }
+                    }
+                    
+                    if (successCount > 0) {
+                        _message.emit("成功添加 $successCount 条日程")
+                        refreshSchedules(token)
+                    } else {
+                        _isLoading.value = false
+                    }
                 } else {
                     _message.emit("AI 解析失败: ${aiResponse.message}")
                     _isLoading.value = false

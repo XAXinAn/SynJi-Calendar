@@ -81,30 +81,11 @@ fun HomeScreen(
     val holidayMap by homeViewModel.holidays.collectAsState()
     val monthDataMap by homeViewModel.currentMonthData.collectAsState()
     val isLoading by homeViewModel.isLoading.collectAsState()
-    val ocrResult by homeViewModel.ocrResult.collectAsState()
     
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // OCR 测试对话框
-    if (ocrResult.isNotEmpty()) {
-        AlertDialog(
-            onDismissRequest = { homeViewModel.clearOcrResult() },
-            title = { Text("OCR 识别测试结果") },
-            text = { 
-                Box(modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
-                    Text(ocrResult) 
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { homeViewModel.clearOcrResult() }) {
-                    Text("关闭并继续AI解析")
-                }
-            }
-        )
-    }
-
-    // 监听 ViewModel 消息
+    // 监听 ViewModel 消息（如：添加成功、失败提示）
     LaunchedEffect(Unit) {
         homeViewModel.message.collectLatest { msg ->
             snackbarHostState.showSnackbar(msg)
@@ -416,7 +397,7 @@ fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
                     lineHeight = 22.sp
                 )
                 
-                if (item.location.isNotEmpty()) {
+                if (!item.location.isNullOrEmpty()) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -427,7 +408,7 @@ fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = item.location,
+                            text = item.location ?: "",
                             fontSize = 13.sp,
                             color = Color.Gray
                         )

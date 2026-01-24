@@ -3,6 +3,7 @@ package com.example.synji_calendar.ui.home
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.annotations.SerializedName
 import com.nlf.calendar.Solar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +13,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
 
-// 修改：id 改为 Long? 类型，默认值为 null
 data class Schedule(
     val id: Long? = null, 
     val title: String,
@@ -21,7 +21,9 @@ data class Schedule(
     val isAllDay: Boolean = false,
     val location: String = "",
     val belonging: String = "个人",
-    val isImportant: Boolean = false
+    @SerializedName("important")
+    val isImportant: Boolean = false,
+    val notes: String = ""
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -87,7 +89,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun addSchedule(token: String, schedule: Schedule, onComplete: () -> Unit) {
         viewModelScope.launch {
             _isLoading.value = true
-            // 关键：强制设置 id 为 null，Gson 序列化时会自动忽略 null 字段，后端将收到一个没有 id 的 JSON
             val response = repository.addSchedule(token, schedule.copy(id = null))
             if (response.code == 200) {
                 refreshSchedules(token)

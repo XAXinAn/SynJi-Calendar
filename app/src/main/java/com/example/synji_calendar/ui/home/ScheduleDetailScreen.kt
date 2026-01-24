@@ -5,9 +5,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -36,13 +38,14 @@ fun ScheduleDetailScreen(
     homeViewModel: HomeViewModel = viewModel()
 ) {
     var title by remember { mutableStateOf(schedule.title) }
-    var location by remember { mutableStateOf(schedule.location) }
+    var location by remember { mutableStateOf(schedule.location ?: "") }
+    var notes by remember { mutableStateOf(schedule.notes ?: "") } // 修复：防止后端返回 null 导致崩溃
     var isImportant by remember { mutableStateOf(schedule.isImportant) }
     var isAllDay by remember { mutableStateOf(schedule.isAllDay) }
     
     var selectedDate by remember { mutableStateOf(schedule.date) }
     var selectedTime by remember { mutableStateOf(schedule.time) }
-    var selectedBelonging by remember { mutableStateOf(schedule.belonging) }
+    var selectedBelonging by remember { mutableStateOf(schedule.belonging ?: "个人") }
     
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
@@ -72,7 +75,6 @@ fun ScheduleDetailScreen(
                         IconButton(
                             enabled = !isLoading,
                             onClick = {
-                                // 修正：安全调用 nullable ID
                                 schedule.id?.let { id ->
                                     homeViewModel.deleteSchedule(token, id, onComplete = onBack)
                                 }
@@ -92,7 +94,8 @@ fun ScheduleDetailScreen(
                                         isAllDay = isAllDay,
                                         location = location,
                                         belonging = selectedBelonging,
-                                        isImportant = isImportant
+                                        isImportant = isImportant,
+                                        notes = notes
                                     ),
                                     onComplete = onBack
                                 )
@@ -121,7 +124,8 @@ fun ScheduleDetailScreen(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = 20.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.height(10.dp))
@@ -169,7 +173,7 @@ fun ScheduleDetailScreen(
                                 onCheckedChange = { isAllDay = it },
                                 enabled = !isLoading,
                                 colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
+                                    checkedThumbColor = Color.White, // 修复拼写错误
                                     checkedTrackColor = CalendarSelectBlue,
                                     uncheckedThumbColor = Color.White,
                                     uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
@@ -256,6 +260,41 @@ fun ScheduleDetailScreen(
                                 )
                             )
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 备注卡片
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color.White,
+                    shadowElevation = 0.5.dp
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            DetailIconWithBg(Icons.Default.Notes)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("备注", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextTitle)
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextField(
+                            value = notes,
+                            onValueChange = { notes = it },
+                            placeholder = { Text("无备注内容", color = Color.LightGray, fontSize = 15.sp) },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
+                            enabled = !isLoading,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                errorIndicatorColor = Color.Transparent
+                            ),
+                            textStyle = TextStyle(fontSize = 15.sp, color = TextTitle, lineHeight = 22.sp)
+                        )
                     }
                 }
             }

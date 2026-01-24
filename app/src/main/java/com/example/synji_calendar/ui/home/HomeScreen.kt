@@ -284,7 +284,7 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEdi
         } else {
             schedules.forEach { schedule ->
                 ScheduleCard(schedule, onClick = { onEditSchedule(schedule) })
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }
@@ -292,33 +292,123 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEdi
 
 @Composable
 fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
-    val accentColor = if (item.isImportant) WorkRed else Color(0xFF535353)
-    Surface(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp).clickable { onClick() }, shape = RoundedCornerShape(20.dp), color = Color.White, shadowElevation = 0.5.dp) {
-        Row(modifier = Modifier.padding(16.dp).height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.width(60.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text(text = if (item.isAllDay) "全天" else item.time.format(DateTimeFormatter.ofPattern("HH:mm")), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (item.isAllDay) CalendarSelectBlue else Color.Black)
-                if (item.isImportant) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Icon(imageVector = Icons.Default.Error, contentDescription = null, tint = WorkRed, modifier = Modifier.size(16.dp))
+    val accentColor = if (item.isImportant) WorkRed else CalendarSelectBlue
+    
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White,
+        shadowElevation = 0.5.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 时间展示区域
+            Column(
+                modifier = Modifier.width(60.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = if (item.isAllDay) "全天" else item.time.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (item.isAllDay) CalendarSelectBlue else Color(0xFF333333)
+                )
+                if (!item.isAllDay) {
+                    Text(
+                        text = "开始",
+                        fontSize = 10.sp,
+                        color = Color.Gray.copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
+            
             Spacer(modifier = Modifier.width(12.dp))
-            Box(modifier = Modifier.width(3.dp).fillMaxHeight().background(accentColor, CircleShape))
+            
+            // 垂直指示条
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .padding(vertical = 4.dp)
+                    .background(accentColor, CircleShape)
+            )
+            
             Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                Text(text = "来自 ${item.belonging}", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color.Gray.copy(alpha = 0.7f), letterSpacing = 0.5.sp)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = item.title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.Black, lineHeight = 22.sp)
+            
+            // 内容区域
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 归属标签
+                    Surface(
+                        color = accentColor.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = item.belonging,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = accentColor,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                    
+                    if (item.isImportant) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.Default.Error,
+                            contentDescription = null,
+                            tint = WorkRed,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(6.dp))
+                
+                Text(
+                    text = item.title,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF333333),
+                    lineHeight = 22.sp
+                )
+                
                 if (item.location.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.LocationOn, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = Color.LightGray,
+                            modifier = Modifier.size(14.dp)
+                        )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = item.location, fontSize = 13.sp, color = Color.Gray)
+                        Text(
+                            text = item.location,
+                            fontSize = 13.sp,
+                            color = Color.Gray
+                        )
                     }
                 }
             }
-            Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.LightGray.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+            
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = Color.LightGray.copy(alpha = 0.5f),
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }

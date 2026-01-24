@@ -5,9 +5,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -37,6 +39,7 @@ fun AddScheduleScreen(
 ) {
     var title by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
     var isImportant by remember { mutableStateOf(false) }
     var isAllDay by remember { mutableStateOf(false) }
     
@@ -81,7 +84,8 @@ fun AddScheduleScreen(
                                         isAllDay = isAllDay,
                                         location = location,
                                         belonging = selectedBelonging,
-                                        isImportant = isImportant
+                                        isImportant = isImportant,
+                                        notes = notes
                                     ),
                                     onComplete = onBack
                                 )
@@ -110,7 +114,8 @@ fun AddScheduleScreen(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = 20.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.height(10.dp))
@@ -245,6 +250,41 @@ fun AddScheduleScreen(
                                 )
                             )
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 备注卡片
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    color = Color.White,
+                    shadowElevation = 0.5.dp
+                ) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AddIconWithBg(Icons.Default.Notes)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("备注", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextTitle)
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextField(
+                            value = notes,
+                            onValueChange = { notes = it },
+                            placeholder = { Text("在此输入备注内容...", color = Color.LightGray, fontSize = 15.sp) },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
+                            enabled = !isLoading,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                                errorIndicatorColor = Color.Transparent
+                            ),
+                            textStyle = TextStyle(fontSize = 15.sp, color = TextTitle, lineHeight = 22.sp)
+                        )
                     }
                 }
             }

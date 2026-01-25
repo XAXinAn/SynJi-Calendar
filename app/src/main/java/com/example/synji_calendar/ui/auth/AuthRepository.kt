@@ -32,8 +32,8 @@ class AuthRepository {
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     
-    // 根据技术文档 1.1 更新服务地址
-    private val baseUrl = "http://192.168.0.105:8080"
+    // 根据最新服务器 IP 更新服务地址
+    private val baseUrl = "http://192.168.0.100:8080"
 
     suspend fun sendVerifyCode(phoneNumber: String): ApiResponse<Unit> = withContext(Dispatchers.IO) {
         val requestBody = gson.toJson(mapOf("phoneNumber" to phoneNumber)).toRequestBody(jsonMediaType)

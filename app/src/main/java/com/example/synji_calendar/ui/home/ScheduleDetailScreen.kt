@@ -37,9 +37,16 @@ fun ScheduleDetailScreen(
     onBack: () -> Unit = {},
     homeViewModel: HomeViewModel = viewModel()
 ) {
+    // 关键修复点：一进入详情页，立即触发标记已读逻辑
+    LaunchedEffect(Unit) {
+        if (!schedule.isViewed) {
+            homeViewModel.markAsViewed(token, schedule)
+        }
+    }
+
     var title by remember { mutableStateOf(schedule.title) }
     var location by remember { mutableStateOf(schedule.location ?: "") }
-    var notes by remember { mutableStateOf(schedule.notes ?: "") } // 修复：防止后端返回 null 导致崩溃
+    var notes by remember { mutableStateOf(schedule.notes ?: "") }
     var isImportant by remember { mutableStateOf(schedule.isImportant) }
     var isAllDay by remember { mutableStateOf(schedule.isAllDay) }
     
@@ -95,7 +102,8 @@ fun ScheduleDetailScreen(
                                         location = location,
                                         belonging = selectedBelonging,
                                         isImportant = isImportant,
-                                        notes = notes
+                                        notes = notes,
+                                        isViewed = true // 更新时强制已读
                                     ),
                                     onComplete = onBack
                                 )
@@ -173,7 +181,7 @@ fun ScheduleDetailScreen(
                                 onCheckedChange = { isAllDay = it },
                                 enabled = !isLoading,
                                 colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White, // 修复拼写错误
+                                    checkedThumbColor = Color.White,
                                     checkedTrackColor = CalendarSelectBlue,
                                     uncheckedThumbColor = Color.White,
                                     uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),

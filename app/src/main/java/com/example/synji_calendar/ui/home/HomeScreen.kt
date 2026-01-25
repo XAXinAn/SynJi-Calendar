@@ -1,13 +1,19 @@
 package com.example.synji_calendar.ui.home
 
+import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -16,11 +22,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Collections
@@ -30,18 +39,23 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.synji_calendar.service.FloatingService
 import com.nlf.calendar.Solar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -78,6 +92,8 @@ fun HomeScreen(
     onAddSchedule: (LocalDate) -> Unit = {},
     onEditSchedule: (Schedule) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val holidayMap by homeViewModel.holidays.collectAsState()
     val monthDataMap by homeViewModel.currentMonthData.collectAsState()
     val isLoading by homeViewModel.isLoading.collectAsState()
@@ -85,7 +101,20 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // 监听 ViewModel 消息（如：添加成功、失败提示）
+    var showHistoryList by remember { mutableStateOf(false) }
+
+    // 监听生命周期，从其他软件切回时刷新
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (token.isNotEmpty()) homeViewModel.refreshSchedules(token, isBackground = true)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // 监听 ViewModel 消息
     LaunchedEffect(Unit) {
         homeViewModel.message.collectLatest { msg ->
             snackbarHostState.showSnackbar(msg)
@@ -96,8 +125,18 @@ fun HomeScreen(
         uri?.let { homeViewModel.performAutoScheduleFromImage(token, it) }
     }
 
+    // 处理悬浮窗权限申请
+    val overlayPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (Settings.canDrawOverlays(context)) {
+            val intent = Intent(context, FloatingService::class.java).apply {
+                putExtra(FloatingService.EXTRA_TOKEN, token)
+            }
+            context.startService(intent)
+        }
+    }
+
     LaunchedEffect(token) {
-        if (token.isNotEmpty()) homeViewModel.refreshSchedules(token)
+        if (token.isNotEmpty()) homeViewModel.refreshSchedules(token, isBackground = true)
     }
 
     val initialMonth = YearMonth.now()
@@ -118,6 +157,13 @@ fun HomeScreen(
     var selectedDate by remember { mutableStateOf<LocalDate?>(LocalDate.now()) }
     var showWheelPicker by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
+
+    // 切换日期静默刷新
+    LaunchedEffect(selectedDate) {
+        if (token.isNotEmpty() && selectedDate != null) {
+            homeViewModel.refreshSchedules(token, isBackground = true)
+        }
+    }
 
     if (showWheelPicker) {
         ModalBottomSheet(
@@ -183,7 +229,17 @@ fun HomeScreen(
 
             Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp, start = 24.dp, end = 24.dp, bottom = 20.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 ActionItem(Icons.Outlined.Collections, "图片上传") { galleryLauncher.launch("image/*") }
-                ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") { }
+                ActionItem(Icons.Outlined.ContentPasteSearch, "悬浮窗") {
+                    if (Settings.canDrawOverlays(context)) {
+                        val intent = Intent(context, FloatingService::class.java).apply {
+                            putExtra(FloatingService.EXTRA_TOKEN, token)
+                        }
+                        context.startService(intent)
+                    } else {
+                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+                        overlayPermissionLauncher.launch(intent)
+                    }
+                }
                 ActionItem(Icons.Outlined.Groups, "群组") { }
                 ActionItem(Icons.Default.Add, "更多") { }
             }
@@ -192,7 +248,12 @@ fun HomeScreen(
                 Column(modifier = Modifier.fillMaxSize()) {
                     Spacer(modifier = Modifier.height(20.dp))
                     Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                        CalendarHeader(displayMonth, onAddClick = { onAddSchedule(selectedDate ?: LocalDate.now()) })
+                        CalendarHeader(
+                            currentMonth = displayMonth,
+                            onMenuClick = { showHistoryList = true },
+                            onAddClick = { onAddSchedule(selectedDate ?: LocalDate.now()) },
+                            onRefreshClick = { if (token.isNotEmpty()) homeViewModel.refreshSchedules(token, isBackground = true) }
+                        )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     
@@ -233,6 +294,58 @@ fun HomeScreen(
             }
         }
 
+        // --- 全屏添加日程记录页面 ---
+        AnimatedVisibility(
+            visible = showHistoryList,
+            enter = slideInHorizontally(initialOffsetX = { -it }),
+            exit = slideOutHorizontally(targetOffsetX = { -it })
+        ) {
+            Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(100.dp).background(Brush.horizontalGradient(listOf(BgGradientStart, BgGradientEnd))).statusBarsPadding().padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { showHistoryList = false }) {
+                            Icon(Icons.Default.ArrowBackIosNew, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                        }
+                        Text("添加日程记录", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
+                    }
+                    
+                    val allSchedules by homeViewModel.allSchedules.collectAsState()
+                    
+                    // 仅显示通过 AI 添加的日程
+                    val historySchedules = remember(allSchedules) {
+                        allSchedules.filter { it.isAiGenerated }.sortedByDescending { it.id ?: 0L } // 以ID倒序，即添加时间倒序
+                    }
+                    
+                    if (historySchedules.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("暂无自动添加记录", color = Color.Gray)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(historySchedules) { schedule ->
+                                HistoryScheduleCard(
+                                    schedule = schedule,
+                                    isUnviewed = !schedule.isViewed,
+                                    onClick = {
+                                        homeViewModel.markAsViewed(token, schedule)
+                                        onEditSchedule(schedule)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Color.White)
@@ -245,6 +358,38 @@ fun HomeScreen(
         }
         
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+@Composable
+fun HistoryScheduleCard(schedule: Schedule, isUnviewed: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White,
+        shadowElevation = 0.5.dp
+    ) {
+        Box(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = schedule.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${schedule.date.format(DateTimeFormatter.ofPattern("MM月dd日"))} ${if (schedule.isAllDay) "全天" else schedule.time.format(DateTimeFormatter.ofPattern("HH:mm"))}",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray)
+            }
+            
+            // 红点标记
+            if (isUnviewed) {
+                Box(
+                    modifier = Modifier.size(8.dp).clip(CircleShape).background(WorkRed).align(Alignment.TopEnd)
+                )
+            }
+        }
     }
 }
 
@@ -451,9 +596,15 @@ fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
 }
 
 @Composable
-fun CalendarHeader(currentMonth: YearMonth, onAddClick: () -> Unit = {}) {
+fun CalendarHeader(currentMonth: YearMonth, onMenuClick: () -> Unit = {}, onAddClick: () -> Unit = {}, onRefreshClick: () -> Unit = {}) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.Menu, null, modifier = Modifier.size(26.dp), tint = Color.Black)
+        IconButton(onClick = onMenuClick, modifier = Modifier.size(26.dp)) {
+            Icon(Icons.Default.Menu, null, tint = Color.Black)
+        }
+        Spacer(modifier = Modifier.width(4.dp))
+        IconButton(onClick = onRefreshClick, modifier = Modifier.size(26.dp)) {
+            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color.Black)
+        }
         Spacer(modifier = Modifier.weight(1f))
         Text(currentMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         Spacer(modifier = Modifier.weight(1f))

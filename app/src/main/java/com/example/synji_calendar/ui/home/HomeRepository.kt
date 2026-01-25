@@ -17,7 +17,6 @@ import java.time.format.DateTimeFormatter
 class HomeRepository {
     private val client = OkHttpClient()
     
-    // 自定义防御性解析器
     private val scheduleAdapter = JsonDeserializer<Schedule> { json, _, context ->
         try {
             val obj = json.asJsonObject
@@ -29,8 +28,19 @@ class HomeRepository {
                 isAllDay = if (obj.has("isAllDay") && !obj.get("isAllDay").isJsonNull) obj.get("isAllDay").asBoolean else false,
                 location = if (obj.has("location") && !obj.get("location").isJsonNull) obj.get("location").asString else null,
                 belonging = if (obj.has("belonging") && !obj.get("belonging").isJsonNull) obj.get("belonging").asString else "默认",
-                isImportant = if (obj.has("important") && !obj.get("important").isJsonNull) obj.get("important").asBoolean else false,
-                notes = if (obj.has("notes") && !obj.get("notes").isJsonNull) obj.get("notes").asString else null
+                isImportant = if (obj.has("important") && !obj.get("important").isJsonNull) obj.get("important").asBoolean else if (obj.has("isImportant") && !obj.get("isImportant").isJsonNull) obj.get("isImportant").asBoolean else false,
+                notes = if (obj.has("notes") && !obj.get("notes").isJsonNull) obj.get("notes").asString else null,
+                // 兼容下划线和驼峰命名
+                isAiGenerated = when {
+                    obj.has("isAiGenerated") -> obj.get("isAiGenerated").asBoolean
+                    obj.has("is_ai_generated") -> obj.get("is_ai_generated").asBoolean
+                    else -> false
+                },
+                isViewed = when {
+                    obj.has("isViewed") -> obj.get("isViewed").asBoolean
+                    obj.has("is_viewed") -> obj.get("is_viewed").asBoolean
+                    else -> true
+                }
             )
         } catch (e: Exception) {
             Schedule(title = "解析异常", date = LocalDate.now())
@@ -54,7 +64,7 @@ class HomeRepository {
         .create()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    private val baseUrl = "http://192.168.0.105:8080"
+    private val baseUrl = "http://192.168.0.100:8080"
 
     suspend fun ping(): ApiResponse<String> = withContext(Dispatchers.IO) {
         val request = Request.Builder().url("$baseUrl/api/ping").get().build()
@@ -72,19 +82,12 @@ class HomeRepository {
         executeRequest(request, object : TypeToken<ApiResponse<Unit>>() {}.type)
     }
 
-    /**
-     * 对齐文档 3.3：AI 解析返回 Schedule 对象数组
-     */
     suspend fun parseScheduleWithAi(token: String, text: String): ApiResponse<List<Schedule>> = withContext(Dispatchers.IO) {
         val requestBody = gson.toJson(mapOf("text" to text)).toRequestBody(jsonMediaType)
         val request = Request.Builder().url("$baseUrl/api/schedule/ai-parse").post(requestBody).header("Authorization", token).build()
-        
         try {
             client.newCall(request).execute().use { response ->
                 val bodyString = response.body?.string() ?: ""
-                Log.d("HomeRepository", "AI Parse Raw Response: $bodyString")
-                
-                // 对齐文档：响应 data 是一个数组
                 val type = object : TypeToken<ApiResponse<List<Schedule>>>() {}.type
                 gson.fromJson<ApiResponse<List<Schedule>>>(bodyString, type)
             }

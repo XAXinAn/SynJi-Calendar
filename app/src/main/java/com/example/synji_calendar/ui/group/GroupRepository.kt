@@ -48,6 +48,33 @@ class GroupRepository {
         executeRequest(request, type)
     }
 
+    /**
+     * 获取群组成员列表
+     */
+    suspend fun fetchGroupMembers(token: String, groupId: String): ApiResponse<List<GroupMember>> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/group/members?groupId=$groupId")
+            .get()
+            .header("Authorization", token)
+            .build()
+        val type = object : TypeToken<ApiResponse<List<GroupMember>>>() {}.type
+        executeRequest(request, type)
+    }
+
+    /**
+     * 设置管理员逻辑
+     */
+    suspend fun setMemberAdmin(token: String, groupId: String, userId: String, isAdmin: Boolean): ApiResponse<Unit> = withContext(Dispatchers.IO) {
+        val requestBody = gson.toJson(SetAdminRequest(groupId, userId, isAdmin)).toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("$baseUrl/api/group/set-admin")
+            .post(requestBody)
+            .header("Authorization", token)
+            .build()
+        val type = object : TypeToken<ApiResponse<Unit>>() {}.type
+        executeRequest(request, type)
+    }
+
     private fun <T> executeRequest(request: Request, responseType: java.lang.reflect.Type): ApiResponse<T> {
         return try {
             client.newCall(request).execute().use { response ->

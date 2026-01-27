@@ -23,7 +23,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
 
-// 对齐文档 3.2 & 3.1: 增加 createdAt 用于排序
+/**
+ * 根据 v1.7 接口文档对齐的日程数据模型
+ */
 data class Schedule(
     val id: Long? = null, 
     val title: String,
@@ -31,16 +33,16 @@ data class Schedule(
     val time: LocalTime = LocalTime.of(0, 0, 0),
     val isAllDay: Boolean = false,
     val location: String? = null, 
-    val belonging: String = "默认", 
+    val belonging: String = "个人", // 文档 4.2: 默认为"个人"
     @SerializedName("important")
     val isImportant: Boolean = false,
     val notes: String? = null,
     @SerializedName("isAiGenerated")
     val isAiGenerated: Boolean = false,
     @SerializedName("isViewed")
-    val isViewed: Boolean = true,
+    val isViewed: Boolean = true, // 初始默认为已读，AI识别时会改为false
     @SerializedName("createdAt")
-    val createdAt: String? = null // yyyy-MM-dd HH:mm:ss
+    val createdAt: String? = null 
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -125,7 +127,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             _loadingMessage.value = "正在保存日程..."
-            val response = repository.addSchedule(token, schedule.copy(id = null, isAiGenerated = false, isViewed = true))
+            // 文档 4.2 & 5.2: 手动添加时 isAiGenerated=false, isViewed=true
+            val scheduleToSave = schedule.copy(
+                id = null, 
+                isAiGenerated = false, 
+                isViewed = true 
+            )
+            val response = repository.addSchedule(token, scheduleToSave)
             if (response.code == 200) {
                 refreshSchedules(token)
                 _message.emit("日程添加成功")
@@ -153,7 +161,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             _loadingMessage.value = "正在更新..."
-            val response = repository.updateSchedule(token, updatedSchedule.copy(isViewed = true))
+            val response = repository.updateSchedule(token, updatedSchedule)
             if (response.code == 200) {
                 refreshSchedules(token)
                 onComplete()
@@ -167,10 +175,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 Log.d("HomeViewModel", "标记已读中: ${schedule.title}")
                 val response = repository.updateSchedule(token, schedule.copy(isViewed = true))
                 if (response.code == 200) {
-                    val refreshResponse = repository.fetchSchedules(token)
-                    if (refreshResponse.code == 200 && refreshResponse.data != null) {
-                        _schedules.value = refreshResponse.data
-                    }
+                    refreshSchedules(token, isBackground = true)
                 }
             }
         }
@@ -179,6 +184,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun performAutoScheduleFromImage(token: String, uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
+            _loadingMessage.value = "正在识别并解析日程..."
             try {
                 val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     ImageDecoder.decodeBitmap(ImageDecoder.createSource(getApplication<Application>().contentResolver, uri)) { decoder, _, _ ->
@@ -200,7 +206,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val schedules = aiResponse.data
                     var successCount = 0
                     schedules.forEach { extraction ->
-                        val addResp = repository.addSchedule(token, extraction.copy(isAiGenerated = true, isViewed = false))
+                        // 文档 5.2: AI解析添加时 isAiGenerated=true, isViewed=false
+                        val scheduleToSave = extraction.copy(
+                            isAiGenerated = true, 
+                            isViewed = false
+                        )
+                        val addResp = repository.addSchedule(token, scheduleToSave)
                         if (addResp.code == 200) successCount++
                     }
                     if (successCount > 0) {
@@ -208,7 +219,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         refreshSchedules(token)
                     }
                 } else {
-                    _message.emit("AI 解析失败")
+                    _message.emit("AI 解析失败: ${aiResponse.message}")
                 }
             } catch (e: Exception) {
                 _message.emit("处理异常: ${e.localizedMessage}")

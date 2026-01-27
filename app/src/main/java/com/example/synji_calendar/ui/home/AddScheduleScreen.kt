@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,56 +66,62 @@ fun AddScheduleScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             topBar = {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            "新建日程",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextTitle
+                Box(modifier = Modifier.background(Brush.horizontalGradient(listOf(BgGradientStart, BgGradientEnd))).statusBarsPadding()) {
+                    CenterAlignedTopAppBar(
+                        title = {
+                            Text(
+                                "新建日程",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        },
+                        navigationIcon = {
+                            TextButton(onClick = onBack) {
+                                Text("取消", color = Color.White, fontSize = 16.sp)
+                            }
+                        },
+                        actions = {
+                            Button(
+                                enabled = !isLoading && title.isNotBlank(),
+                                onClick = {
+                                    homeViewModel.addSchedule(
+                                        token = token,
+                                        schedule = Schedule(
+                                            title = title,
+                                            date = selectedDate,
+                                            time = if (isAllDay) LocalTime.MIN else selectedTime,
+                                            isAllDay = isAllDay,
+                                            location = location,
+                                            belonging = selectedBelonging,
+                                            isImportant = isImportant,
+                                            notes = notes
+                                        ),
+                                        onComplete = onBack
+                                    )
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White,
+                                    contentColor = BgGradientStart,
+                                    disabledContainerColor = Color.White.copy(alpha = 0.5f),
+                                    disabledContentColor = BgGradientStart.copy(alpha = 0.5f)
+                                ),
+                                shape = RoundedCornerShape(4.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                                modifier = Modifier.padding(end = 8.dp).height(32.dp)
+                            ) {
+                                if (isLoading) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = BgGradientStart)
+                                } else {
+                                    Text("完成", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        },
+                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                            containerColor = Color.Transparent
                         )
-                    },
-                    navigationIcon = {
-                        TextButton(onClick = onBack) {
-                            Text("取消", color = Color.Gray, fontSize = 16.sp)
-                        }
-                    },
-                    actions = {
-                        TextButton(
-                            enabled = !isLoading && title.isNotBlank(),
-                            onClick = {
-                                homeViewModel.addSchedule(
-                                    token = token,
-                                    schedule = Schedule(
-                                        title = title,
-                                        date = selectedDate,
-                                        time = if (isAllDay) LocalTime.MIN else selectedTime,
-                                        isAllDay = isAllDay,
-                                        location = location,
-                                        belonging = selectedBelonging,
-                                        isImportant = isImportant,
-                                        notes = notes
-                                    ),
-                                    onComplete = onBack
-                                )
-                            }
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = CalendarSelectBlue)
-                            } else {
-                                Text(
-                                    "完成",
-                                    color = if (title.isNotBlank()) CalendarSelectBlue else Color.Gray,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = Color.Transparent
                     )
-                )
+                }
             },
             containerColor = ContainerGrey
         ) { padding ->
@@ -148,7 +155,7 @@ fun AddScheduleScreen(
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
+                                focusedIndicatorColor = BgGradientStart,
                                 unfocusedIndicatorColor = Color.Transparent,
                                 disabledIndicatorColor = Color.Transparent,
                                 errorIndicatorColor = Color.Transparent
@@ -172,7 +179,7 @@ fun AddScheduleScreen(
                                 enabled = !isLoading,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
-                                    checkedTrackColor = CalendarSelectBlue,
+                                    checkedTrackColor = BgGradientStart,
                                     uncheckedThumbColor = Color.White,
                                     uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
                                     uncheckedBorderColor = Color.Transparent
@@ -223,7 +230,7 @@ fun AddScheduleScreen(
                                         color = TextTitle
                                     ),
                                     singleLine = true,
-                                    cursorBrush = SolidColor(CalendarSelectBlue)
+                                    cursorBrush = SolidColor(BgGradientStart)
                                 )
                             }
                         }
@@ -251,7 +258,7 @@ fun AddScheduleScreen(
                                 enabled = !isLoading,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
-                                    checkedTrackColor = CalendarSelectBlue,
+                                    checkedTrackColor = BgGradientStart,
                                     uncheckedThumbColor = Color.White,
                                     uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
                                     uncheckedBorderColor = Color.Transparent
@@ -286,7 +293,7 @@ fun AddScheduleScreen(
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
+                                focusedIndicatorColor = BgGradientStart,
                                 unfocusedIndicatorColor = Color.Transparent,
                                 disabledIndicatorColor = Color.Transparent,
                                 errorIndicatorColor = Color.Transparent

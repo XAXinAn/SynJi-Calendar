@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -70,67 +71,73 @@ fun ScheduleDetailScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             topBar = {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            "日程详情",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextTitle
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack, enabled = !isLoading) {
-                            Icon(Icons.Default.ChevronLeft, "Back", modifier = Modifier.size(32.dp), tint = IconColor)
-                        }
-                    },
-                    actions = {
-                        IconButton(
-                            enabled = !isLoading,
-                            onClick = {
-                                schedule.id?.let { id ->
-                                    homeViewModel.deleteSchedule(token, id, onComplete = onBack)
+                Box(modifier = Modifier.background(Brush.horizontalGradient(listOf(BgGradientStart, BgGradientEnd))).statusBarsPadding()) {
+                    CenterAlignedTopAppBar(
+                        title = {
+                            Text(
+                                "日程详情",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBack, enabled = !isLoading) {
+                                Icon(Icons.Default.ChevronLeft, "Back", modifier = Modifier.size(32.dp), tint = Color.White)
+                            }
+                        },
+                        actions = {
+                            IconButton(
+                                enabled = !isLoading,
+                                onClick = {
+                                    schedule.id?.let { id ->
+                                        homeViewModel.deleteSchedule(token, id, onComplete = onBack)
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.DeleteOutline, "Delete", tint = Color.White.copy(alpha = 0.8f))
+                            }
+                            Button(
+                                enabled = !isLoading && title.isNotBlank(),
+                                onClick = {
+                                    homeViewModel.updateSchedule(
+                                        token = token,
+                                        updatedSchedule = schedule.copy(
+                                            title = title,
+                                            date = selectedDate,
+                                            time = if (isAllDay) LocalTime.MIN else selectedTime,
+                                            isAllDay = isAllDay,
+                                            location = location,
+                                            belonging = selectedBelonging,
+                                            isImportant = isImportant,
+                                            notes = notes,
+                                            isViewed = true // 更新时强制已读
+                                        ),
+                                        onComplete = onBack
+                                    )
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White,
+                                    contentColor = BgGradientStart,
+                                    disabledContainerColor = Color.White.copy(alpha = 0.5f),
+                                    disabledContentColor = BgGradientStart.copy(alpha = 0.5f)
+                                ),
+                                shape = RoundedCornerShape(4.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                                modifier = Modifier.padding(end = 8.dp).height(32.dp)
+                            ) {
+                                if (isLoading) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = BgGradientStart)
+                                } else {
+                                    Text("完成", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
-                        ) {
-                            Icon(Icons.Default.DeleteOutline, "Delete", tint = Color.Gray.copy(alpha = 0.7f))
-                        }
-                        TextButton(
-                            enabled = !isLoading && title.isNotBlank(),
-                            onClick = {
-                                homeViewModel.updateSchedule(
-                                    token = token,
-                                    updatedSchedule = schedule.copy(
-                                        title = title,
-                                        date = selectedDate,
-                                        time = if (isAllDay) LocalTime.MIN else selectedTime,
-                                        isAllDay = isAllDay,
-                                        location = location,
-                                        belonging = selectedBelonging,
-                                        isImportant = isImportant,
-                                        notes = notes,
-                                        isViewed = true // 更新时强制已读
-                                    ),
-                                    onComplete = onBack
-                                )
-                            }
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = CalendarSelectBlue)
-                            } else {
-                                Text(
-                                    "完成",
-                                    color = if (title.isNotBlank()) CalendarSelectBlue else Color.Gray,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = Color.Transparent
+                        },
+                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                            containerColor = Color.Transparent
+                        )
                     )
-                )
+                }
             },
             containerColor = ContainerGrey
         ) { padding ->
@@ -164,7 +171,7 @@ fun ScheduleDetailScreen(
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
+                                focusedIndicatorColor = BgGradientStart,
                                 unfocusedIndicatorColor = Color.Transparent,
                                 disabledIndicatorColor = Color.Transparent,
                                 errorIndicatorColor = Color.Transparent
@@ -188,7 +195,7 @@ fun ScheduleDetailScreen(
                                 enabled = !isLoading,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
-                                    checkedTrackColor = CalendarSelectBlue,
+                                    checkedTrackColor = BgGradientStart,
                                     uncheckedThumbColor = Color.White,
                                     uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
                                     uncheckedBorderColor = Color.Transparent
@@ -239,7 +246,7 @@ fun ScheduleDetailScreen(
                                         color = TextTitle
                                     ),
                                     singleLine = true,
-                                    cursorBrush = SolidColor(CalendarSelectBlue)
+                                    cursorBrush = SolidColor(BgGradientStart)
                                 )
                             }
                         }
@@ -267,7 +274,7 @@ fun ScheduleDetailScreen(
                                 enabled = !isLoading,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
-                                    checkedTrackColor = CalendarSelectBlue,
+                                    checkedTrackColor = BgGradientStart,
                                     uncheckedThumbColor = Color.White,
                                     uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
                                     uncheckedBorderColor = Color.Transparent
@@ -302,7 +309,7 @@ fun ScheduleDetailScreen(
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
+                                focusedIndicatorColor = BgGradientStart,
                                 unfocusedIndicatorColor = Color.Transparent,
                                 disabledIndicatorColor = Color.Transparent,
                                 errorIndicatorColor = Color.Transparent

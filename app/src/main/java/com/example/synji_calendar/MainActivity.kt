@@ -27,12 +27,7 @@ import com.example.synji_calendar.ui.home.Schedule
 import com.example.synji_calendar.ui.home.BgGradientStart
 import com.example.synji_calendar.ui.auth.AuthDialogContent
 import com.example.synji_calendar.ui.auth.AuthViewModel
-import com.example.synji_calendar.ui.group.GroupScreen
-import com.example.synji_calendar.ui.group.GroupDetailScreen
-import com.example.synji_calendar.ui.group.GroupInfo
-import com.example.synji_calendar.ui.group.GroupViewModel
-import com.example.synji_calendar.ui.group.CreateGroupScreen
-import com.example.synji_calendar.ui.group.JoinGroupScreen
+import com.example.synji_calendar.ui.group.*
 import com.example.synji_calendar.ui.profile.ProfileScreen
 import com.example.synji_calendar.ui.profile.EditProfileFieldScreen
 import com.example.synji_calendar.ui.theme.SynJiCalendarTheme
@@ -47,11 +42,13 @@ class MainActivity : ComponentActivity() {
                 val authViewModel: AuthViewModel = viewModel()
                 val authUiState by authViewModel.uiState.collectAsState()
                 val groupViewModel: GroupViewModel = viewModel()
+                val groupUiState by groupViewModel.uiState.collectAsState()
                 
                 var currentScreen by remember { mutableStateOf("home") }
                 var targetDate by remember { mutableStateOf(LocalDate.now()) }
                 var editingSchedule by remember { mutableStateOf<Schedule?>(null) }
                 var selectedGroup by remember { mutableStateOf<GroupInfo?>(null) }
+                var selectedMemberId by remember { mutableStateOf<String?>(null) }
                 
                 // 个人中心编辑相关状态
                 var editingField by remember { mutableStateOf("") }
@@ -62,6 +59,7 @@ class MainActivity : ComponentActivity() {
                 val navigateBack: () -> Unit = {
                     focusManager.clearFocus()
                     currentScreen = when(currentScreen) {
+                        "member_detail" -> "group_detail"
                         "group_detail" -> "group_list"
                         "group_create" -> "group_list"
                         "group_join" -> "group_list"
@@ -141,8 +139,29 @@ class MainActivity : ComponentActivity() {
                                 "group_detail" -> {
                                     GroupDetailScreen(
                                         group = selectedGroup,
-                                        onBack = navigateBack
+                                        currentUserId = authUiState.user?.userId ?: "",
+                                        token = authUiState.token ?: "",
+                                        viewModel = groupViewModel,
+                                        onBack = navigateBack,
+                                        onMemberClick = { member ->
+                                            selectedMemberId = member.userId
+                                            currentScreen = "member_detail"
+                                        }
                                     )
+                                    BackHandler { navigateBack() }
+                                }
+                                "member_detail" -> {
+                                    val member = groupUiState.members.find { it.userId == selectedMemberId }
+                                    member?.let { m ->
+                                        MemberDetailScreen(
+                                            member = m,
+                                            groupId = selectedGroup?.groupId ?: "",
+                                            isOwner = authUiState.user?.userId == selectedGroup?.ownerId,
+                                            token = authUiState.token ?: "",
+                                            viewModel = groupViewModel,
+                                            onBack = navigateBack
+                                        )
+                                    }
                                     BackHandler { navigateBack() }
                                 }
                                 "profile" -> {

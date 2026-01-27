@@ -25,6 +25,7 @@ import com.example.synji_calendar.ui.home.AddScheduleScreen
 import com.example.synji_calendar.ui.home.ScheduleDetailScreen
 import com.example.synji_calendar.ui.home.Schedule
 import com.example.synji_calendar.ui.home.BgGradientStart
+import com.example.synji_calendar.ui.home.MoreScreen
 import com.example.synji_calendar.ui.auth.AuthDialogContent
 import com.example.synji_calendar.ui.auth.AuthViewModel
 import com.example.synji_calendar.ui.group.*
@@ -56,6 +57,23 @@ class MainActivity : ComponentActivity() {
                 
                 val focusManager = LocalFocusManager.current
 
+                // 定义页面深度，用于判断前进或后退动画
+                val screenDepth = remember {
+                    mapOf(
+                        "home" to 0,
+                        "add" to 1,
+                        "detail" to 1,
+                        "group_list" to 1,
+                        "profile" to 1,
+                        "more" to 1,
+                        "group_create" to 2,
+                        "group_join" to 2,
+                        "group_detail" to 2,
+                        "edit_profile" to 2,
+                        "member_detail" to 3
+                    )
+                }
+
                 val navigateBack: () -> Unit = {
                     focusManager.clearFocus()
                     currentScreen = when(currentScreen) {
@@ -65,6 +83,7 @@ class MainActivity : ComponentActivity() {
                         "group_join" -> "group_list"
                         "group_list" -> "home"
                         "profile" -> "home"
+                        "more" -> "home"
                         "edit_profile" -> "profile"
                         else -> "home"
                     }
@@ -76,12 +95,29 @@ class MainActivity : ComponentActivity() {
                         AnimatedContent(
                             targetState = currentScreen,
                             transitionSpec = {
-                                if (targetState == "home") {
-                                    slideInHorizontally(initialOffsetX = { -it / 4 }, animationSpec = tween(200, easing = FastOutSlowInEasing)) togetherWith
-                                    slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(200, easing = FastOutSlowInEasing))
+                                val initialDepth = screenDepth[initialState] ?: 0
+                                val targetDepth = screenDepth[targetState] ?: 0
+                                
+                                if (targetDepth < initialDepth) {
+                                    // 后退：当前页面（旧页面）向右退出，新页面从左侧进入
+                                    slideInHorizontally(
+                                        initialOffsetX = { -it / 4 }, 
+                                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                    ) + fadeIn() togetherWith
+                                    slideOutHorizontally(
+                                        targetOffsetX = { it }, 
+                                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                    )
                                 } else {
-                                    slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(200, easing = FastOutSlowInEasing)) togetherWith
-                                    slideOutHorizontally(targetOffsetX = { -it / 4 }, animationSpec = tween(200, easing = FastOutSlowInEasing))
+                                    // 前进：新页面从右侧进入，当前页面（旧页面）向左退出
+                                    slideInHorizontally(
+                                        initialOffsetX = { it }, 
+                                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                    ) togetherWith
+                                    slideOutHorizontally(
+                                        targetOffsetX = { -it / 4 }, 
+                                        animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                    ) + fadeOut()
                                 }
                             },
                             label = "screen_transition"
@@ -92,7 +128,8 @@ class MainActivity : ComponentActivity() {
                                     onAddSchedule = { date -> targetDate = date; currentScreen = "add" },
                                     onEditSchedule = { schedule -> editingSchedule = schedule; currentScreen = "detail" },
                                     onGroupClick = { currentScreen = "group_list" },
-                                    onProfileClick = { currentScreen = "profile" }
+                                    onProfileClick = { currentScreen = "profile" },
+                                    onMoreClick = { currentScreen = "more" }
                                 )
                                 "add" -> {
                                     AddScheduleScreen(token = authUiState.token ?: "", initialDate = targetDate, onBack = navigateBack)
@@ -192,6 +229,10 @@ class MainActivity : ComponentActivity() {
                                             navigateBack()
                                         }
                                     )
+                                    BackHandler { navigateBack() }
+                                }
+                                "more" -> {
+                                    MoreScreen(onBack = navigateBack)
                                     BackHandler { navigateBack() }
                                 }
                             }

@@ -7,9 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -76,7 +73,7 @@ fun AuthDialogContent(
         shadowElevation = 8.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Header
+            // Header: 移除了返回和关闭按钮
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -84,9 +81,6 @@ fun AuthDialogContent(
                     .background(brush = Brush.horizontalGradient(listOf(BgGradientStart, BgGradientEnd)))
                     .padding(horizontal = 16.dp)
             ) {
-                IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterStart)) {
-                    Icon(Icons.Default.ChevronLeft, "Back", tint = Color.White, modifier = Modifier.size(28.dp))
-                }
                 Row(modifier = Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
                     Surface(modifier = Modifier.size(32.dp), shape = RoundedCornerShape(8.dp), color = Color.White.copy(alpha = 0.9f)) {
                         Box(contentAlignment = Alignment.Center) { Text("SJ", color = BgGradientStart, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp) }
@@ -96,9 +90,6 @@ fun AuthDialogContent(
                         Text("讯极日历", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         Text("SYN JI CALENDAR", color = Color.White.copy(alpha = 0.8f), fontSize = 8.sp)
                     }
-                }
-                IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterEnd)) {
-                    Icon(Icons.Default.Close, "Close", tint = Color.White, modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -114,9 +105,19 @@ fun AuthDialogContent(
                         Box(modifier = Modifier.width(1.dp).height(20.dp).background(Color.LightGray))
                         Spacer(modifier = Modifier.width(12.dp))
                         BasicTextField(
-                            value = phoneNumber, onValueChange = { phoneNumber = it }, modifier = Modifier.weight(1f),
+                            value = phoneNumber, 
+                            onValueChange = { phoneNumber = it }, 
+                            modifier = Modifier.weight(1f),
                             textStyle = TextStyle(fontSize = 16.sp, color = TextTitle),
-                            decorationBox = { if (phoneNumber.isEmpty()) Text("请输入手机号", color = Color.Gray.copy(alpha = 0.4f), fontSize = 16.sp); it() }
+                            singleLine = true,
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (phoneNumber.isEmpty()) {
+                                        Text("请输入手机号", color = Color.Gray.copy(alpha = 0.4f), fontSize = 16.sp)
+                                    }
+                                    innerTextField()
+                                }
+                            }
                         )
                     }
                 }
@@ -127,9 +128,19 @@ fun AuthDialogContent(
                 Surface(modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(12.dp), color = ContainerGrey, border = BorderStroke(0.5.dp, Color.LightGray.copy(alpha = 0.3f))) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, end = 6.dp)) {
                         BasicTextField(
-                            value = verificationCode, onValueChange = { verificationCode = it }, modifier = Modifier.weight(1f),
+                            value = verificationCode, 
+                            onValueChange = { verificationCode = it }, 
+                            modifier = Modifier.weight(1f),
                             textStyle = TextStyle(fontSize = 16.sp, color = TextTitle),
-                            decorationBox = { if (verificationCode.isEmpty()) Text("请输入验证码", color = Color.Gray.copy(alpha = 0.4f), fontSize = 16.sp); it() }
+                            singleLine = true,
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (verificationCode.isEmpty()) {
+                                        Text("请输入验证码", color = Color.Gray.copy(alpha = 0.4f), fontSize = 16.sp)
+                                    }
+                                    innerTextField()
+                                }
+                            }
                         )
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.width(100.dp)) {
                             if (uiState.isLoading && verificationCode.isEmpty()) {

@@ -41,13 +41,22 @@ fun ScheduleDetailScreen(
     homeViewModel: HomeViewModel = viewModel(),
     groupViewModel: GroupViewModel = viewModel()
 ) {
-    // 关键修复点：一进入详情页，立即触发标记已读逻辑
+    val groupUiState by groupViewModel.uiState.collectAsState()
+    
+    val isPersonalSchedule = schedule.belonging == "个人" || schedule.belonging == null
+    val targetGroup = groupUiState.groups.find { it.name == schedule.belonging }
+    val memberInGroup = groupUiState.members.find { it.role == "OWNER" || it.role == "ADMIN" }
+    val canEdit = isPersonalSchedule || memberInGroup != null 
+
     LaunchedEffect(Unit) {
         if (!schedule.isViewed) {
             homeViewModel.markAsViewed(token, schedule)
         }
         if (token.isNotEmpty()) {
             groupViewModel.loadGroups(token)
+            targetGroup?.groupId?.let {
+                groupViewModel.loadMembers(token, it)
+            }
         }
     }
 
@@ -73,226 +82,120 @@ fun ScheduleDetailScreen(
             topBar = {
                 Box(modifier = Modifier.background(Brush.horizontalGradient(listOf(BgGradientStart, BgGradientEnd))).statusBarsPadding()) {
                     CenterAlignedTopAppBar(
-                        title = {
-                            Text(
-                                "日程详情",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        },
+                        title = { Text("日程详情", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White) },
                         navigationIcon = {
                             IconButton(onClick = onBack, enabled = !isLoading) {
                                 Icon(Icons.Default.ChevronLeft, "Back", modifier = Modifier.size(32.dp), tint = Color.White)
                             }
                         },
                         actions = {
-                            IconButton(
-                                enabled = !isLoading,
-                                onClick = {
-                                    schedule.id?.let { id ->
-                                        homeViewModel.deleteSchedule(token, id, onComplete = onBack)
-                                    }
+                            if (canEdit) {
+                                IconButton(enabled = !isLoading, onClick = { schedule.id?.let { homeViewModel.deleteSchedule(token, it, onBack) } }) {
+                                    Icon(Icons.Default.DeleteOutline, "Delete", tint = Color.White.copy(alpha = 0.8f))
                                 }
-                            ) {
-                                Icon(Icons.Default.DeleteOutline, "Delete", tint = Color.White.copy(alpha = 0.8f))
-                            }
-                            Button(
-                                enabled = !isLoading && title.isNotBlank(),
-                                onClick = {
-                                    homeViewModel.updateSchedule(
-                                        token = token,
-                                        updatedSchedule = schedule.copy(
-                                            title = title,
-                                            date = selectedDate,
-                                            time = if (isAllDay) LocalTime.MIN else selectedTime,
-                                            isAllDay = isAllDay,
-                                            location = location,
-                                            belonging = selectedBelonging,
-                                            isImportant = isImportant,
-                                            notes = notes,
-                                            isViewed = true // 更新时强制已读
-                                        ),
-                                        onComplete = onBack
-                                    )
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.White,
-                                    contentColor = BgGradientStart,
-                                    disabledContainerColor = Color.White.copy(alpha = 0.5f),
-                                    disabledContentColor = BgGradientStart.copy(alpha = 0.5f)
-                                ),
-                                shape = RoundedCornerShape(4.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                                modifier = Modifier.padding(end = 8.dp).height(32.dp)
-                            ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = BgGradientStart)
-                                } else {
-                                    Text("完成", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Button(
+                                    enabled = !isLoading && title.isNotBlank(),
+                                    onClick = {
+                                        homeViewModel.updateSchedule(token, schedule.copy(title=title, date=selectedDate, time=if(isAllDay)LocalTime.MIN else selectedTime, isAllDay=isAllDay, location=location, belonging=selectedBelonging, isImportant=isImportant, notes=notes, isViewed=true), onBack)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = BgGradientStart),
+                                    shape = RoundedCornerShape(4.dp),
+                                    modifier = Modifier.padding(end = 8.dp).height(32.dp)
+                                ) {
+                                    if (isLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = BgGradientStart)
+                                    else Text("完成", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         },
-                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                            containerColor = Color.Transparent
-                        )
+                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
                     )
                 }
             },
             containerColor = ContainerGrey
         ) { padding ->
             Column(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp)
-                    .verticalScroll(rememberScrollState()),
+                modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.height(10.dp))
                 
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    color = Color.White,
-                    shadowElevation = 0.5.dp
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        TextField(
-                            value = title,
-                            onValueChange = { title = it },
-                            placeholder = { Text("请输入日程标题", color = Color.LightGray) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            enabled = !isLoading,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = BgGradientStart,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                disabledIndicatorColor = Color.Transparent,
-                                errorIndicatorColor = Color.Transparent
-                            ),
-                            textStyle = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextTitle)
-                        )
+                Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), color = Color.White) {
+                    Column(modifier = Modifier.padding(24.dp)) {
+                        if (canEdit) {
+                            TextField(
+                                value = title, onValueChange = { title = it },
+                                placeholder = { Text("请输入日程标题", color = Color.LightGray) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                enabled = !isLoading,
+                                colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = BgGradientStart, unfocusedIndicatorColor = Color.Transparent),
+                                textStyle = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextTitle)
+                            )
+                        } else {
+                            Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextTitle, modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp))
+                        }
 
                         DetailDivider()
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Row(modifier = Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
                             DetailIconWithBg(Icons.Default.AccessTimeFilled)
                             Spacer(modifier = Modifier.width(12.dp))
                             Text("全天", fontSize = 15.sp, color = Color.Gray)
                             Spacer(modifier = Modifier.weight(1f))
-                            Switch(
-                                checked = isAllDay,
-                                onCheckedChange = { isAllDay = it },
-                                enabled = !isLoading,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = BgGradientStart,
-                                    uncheckedThumbColor = Color.White,
-                                    uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
-                                    uncheckedBorderColor = Color.Transparent
-                                )
-                            )
+                            if (canEdit) {
+                                Switch(checked = isAllDay, onCheckedChange = { isAllDay = it }, enabled = !isLoading, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = BgGradientStart))
+                            } else {
+                                Text(if (isAllDay) "是" else "否", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = if (isAllDay) BgGradientStart else Color.Gray, modifier = Modifier.padding(end = 4.dp))
+                            }
                         }
                         DetailDivider()
 
-                        DetailEditRow(
-                            Icons.Default.CalendarToday, 
-                            "日期", 
-                            selectedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")),
-                            onClick = { if (!isLoading) showDatePicker = true }
-                        )
+                        DetailEditRow(Icons.Default.CalendarToday, "日期", selectedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")), onClick = { if (canEdit) showDatePicker = true }, showArrow = canEdit)
                         DetailDivider()
                         
                         if (!isAllDay) {
-                            DetailEditRow(
-                                Icons.Default.AccessTime, 
-                                "时间", 
-                                selectedTime.format(DateTimeFormatter.ofPattern("HH:mm")),
-                                onClick = { if (!isLoading) showTimePicker = true }
-                            )
+                            DetailEditRow(Icons.Default.AccessTime, "时间", selectedTime.format(DateTimeFormatter.ofPattern("HH:mm")), onClick = { if (canEdit) showTimePicker = true }, showArrow = canEdit)
                             DetailDivider()
                         }
                         
-                        Row(
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Row(modifier = Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
                             DetailIconWithBg(Icons.Default.LocationOn)
                             Spacer(modifier = Modifier.width(12.dp))
                             Text("地点", fontSize = 15.sp, color = Color.Gray, modifier = Modifier.width(60.dp))
                             Spacer(modifier = Modifier.weight(1f))
-                            
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                                if (location.isEmpty()) {
-                                    Text("未设置地点", color = Color.LightGray, fontSize = 15.sp)
-                                }
-                                BasicTextField(
-                                    value = location,
-                                    onValueChange = { location = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    enabled = !isLoading,
-                                    textStyle = TextStyle(
-                                        fontSize = 15.sp, 
-                                        textAlign = TextAlign.End,
-                                        color = TextTitle
-                                    ),
-                                    singleLine = true,
-                                    cursorBrush = SolidColor(BgGradientStart)
-                                )
+                            if (canEdit) {
+                                BasicTextField(value = location, onValueChange = { location = it }, modifier = Modifier.fillMaxWidth(), textStyle = TextStyle(fontSize = 15.sp, textAlign = TextAlign.End, color = TextTitle), singleLine = true, cursorBrush = SolidColor(BgGradientStart), decorationBox = { if (location.isEmpty()) Text("未设置地点", color = Color.LightGray, fontSize = 15.sp, textAlign = TextAlign.End); it() })
+                            } else {
+                                Text(if (location.isEmpty()) "未设置" else location, fontSize = 15.sp, color = TextTitle, textAlign = TextAlign.End, modifier = Modifier.padding(end = 4.dp))
                             }
                         }
                         DetailDivider()
                         
-                        DetailEditRow(
-                            Icons.Default.Groups, 
-                            "归属", 
-                            selectedBelonging,
-                            onClick = { if (!isLoading) isSelectingBelonging = true }
-                        )
+                        DetailEditRow(Icons.Default.Groups, "归属", selectedBelonging, onClick = { if (canEdit) isSelectingBelonging = true }, showArrow = canEdit)
                         DetailDivider()
                         
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Row(modifier = Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
                             DetailIconWithBg(Icons.Default.Star, if (isImportant) Color(0xFFFFB300) else IconColor.copy(alpha = 0.6f))
                             Spacer(modifier = Modifier.width(12.dp))
                             Text("重要", fontSize = 15.sp, color = Color.Gray)
                             Spacer(modifier = Modifier.weight(1f))
-                            Switch(
-                                checked = isImportant,
-                                onCheckedChange = { isImportant = it },
-                                enabled = !isLoading,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = BgGradientStart,
-                                    uncheckedThumbColor = Color.White,
-                                    uncheckedTrackColor = Color.LightGray.copy(alpha = 0.5f),
-                                    uncheckedBorderColor = Color.Transparent
+                            if (canEdit) {
+                                Switch(checked = isImportant, onCheckedChange = { isImportant = it }, enabled = !isLoading, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = BgGradientStart))
+                            } else {
+                                Icon(
+                                    if (isImportant) Icons.Default.Star else Icons.Default.StarBorder, 
+                                    null, 
+                                    tint = if (isImportant) Color(0xFFFFB300) else Color.LightGray,
+                                    modifier = Modifier.size(20.dp).padding(end = 4.dp)
                                 )
-                            )
+                            }
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 备注卡片
-                Surface(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    color = Color.White,
-                    shadowElevation = 0.5.dp
-                ) {
+                Surface(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp), shape = RoundedCornerShape(28.dp), color = Color.White) {
                     Column(modifier = Modifier.padding(24.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             DetailIconWithBg(Icons.AutoMirrored.Filled.Notes)
@@ -300,126 +203,51 @@ fun ScheduleDetailScreen(
                             Text("备注", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextTitle)
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        TextField(
-                            value = notes,
-                            onValueChange = { notes = it },
-                            placeholder = { Text("无备注内容", color = Color.LightGray, fontSize = 15.sp) },
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
-                            enabled = !isLoading,
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = BgGradientStart,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                disabledIndicatorColor = Color.Transparent,
-                                errorIndicatorColor = Color.Transparent
-                            ),
-                            textStyle = TextStyle(fontSize = 15.sp, color = TextTitle, lineHeight = 22.sp)
-                        )
+                        if (canEdit) {
+                            TextField(value = notes, onValueChange = { notes = it }, placeholder = { Text("无备注内容", color = Color.LightGray, fontSize = 15.sp) }, modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp), colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = BgGradientStart, unfocusedIndicatorColor = Color.Transparent), textStyle = TextStyle(fontSize = 15.sp, color = TextTitle, lineHeight = 22.sp))
+                        } else {
+                            Text(if (notes.isEmpty()) "无备注内容" else notes, fontSize = 15.sp, color = TextTitle, lineHeight = 22.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
+                        }
                     }
                 }
             }
         }
 
-        AnimatedVisibility(
-            visible = isSelectingBelonging,
-            enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)),
-            exit = slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
-        ) {
-            BelongingSelectionScreen(
-                currentBelonging = selectedBelonging,
-                onSelected = {
-                    selectedBelonging = it
-                    isSelectingBelonging = false
-                },
-                onBack = { isSelectingBelonging = false },
-                groupViewModel = groupViewModel
-            )
+        AnimatedVisibility(visible = isSelectingBelonging, enter = slideInHorizontally(initialOffsetX = { it }), exit = slideOutHorizontally(targetOffsetX = { it })) {
+            BelongingSelectionScreen(currentBelonging = selectedBelonging, onSelected = { selectedBelonging = it; isSelectingBelonging = false }, onBack = { isSelectingBelonging = false }, groupViewModel = groupViewModel)
         }
     }
 
     if (showDatePicker) {
-        ModalBottomSheet(
-            onDismissRequest = { showDatePicker = false },
-            sheetState = sheetState,
-            containerColor = Color.White,
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-            dragHandle = null
-        ) {
-            WheelDatePickerContent(
-                initialDate = selectedDate,
-                onConfirm = { date ->
-                    selectedDate = date
-                    showDatePicker = false
-                },
-                onCancel = { showDatePicker = false }
-            )
+        ModalBottomSheet(onDismissRequest = { showDatePicker = false }, sheetState = sheetState, containerColor = Color.White, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp), dragHandle = null) {
+            WheelDatePickerContent(initialDate = selectedDate, onConfirm = { selectedDate = it; showDatePicker = false }, onCancel = { showDatePicker = false })
         }
     }
 
     if (showTimePicker) {
-        ModalBottomSheet(
-            onDismissRequest = { showTimePicker = false },
-            sheetState = sheetState,
-            containerColor = Color.White,
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-            dragHandle = null
-        ) {
-            WheelTimePickerContent(
-                initialTime = selectedTime,
-                onConfirm = { time ->
-                    selectedTime = time
-                    showTimePicker = false
-                },
-                onCancel = { showTimePicker = false }
-            )
+        ModalBottomSheet(onDismissRequest = { showTimePicker = false }, sheetState = sheetState, containerColor = Color.White, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp), dragHandle = null) {
+            WheelTimePickerContent(initialTime = selectedTime, onConfirm = { selectedTime = it; showTimePicker = false }, onCancel = { showTimePicker = false })
         }
     }
 }
 
-@Composable
-private fun DetailDivider() {
-    HorizontalDivider(
-        modifier = Modifier.padding(vertical = 4.dp),
-        thickness = 0.5.dp,
-        color = Color(0xFFF0F0F0)
-    )
-}
+@Composable private fun DetailDivider() = HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp, color = Color(0xFFF0F0F0))
 
 @Composable
 private fun DetailIconWithBg(icon: ImageVector, tint: Color = IconColor.copy(alpha = 0.6f)) {
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .background(ContainerGrey, CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(16.dp)
-        )
+    Box(modifier = Modifier.size(32.dp).background(ContainerGrey, CircleShape), contentAlignment = Alignment.Center) {
+        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
     }
 }
 
 @Composable
-private fun DetailEditRow(icon: ImageVector, label: String, value: String, onClick: () -> Unit = {}) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(48.dp).clickable { onClick() },
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+private fun DetailEditRow(icon: ImageVector, label: String, value: String, onClick: () -> Unit = {}, showArrow: Boolean = true) {
+    Row(modifier = Modifier.fillMaxWidth().height(48.dp).then(if (showArrow) Modifier.clickable { onClick() } else Modifier), verticalAlignment = Alignment.CenterVertically) {
         DetailIconWithBg(icon)
         Spacer(modifier = Modifier.width(12.dp))
         Text(text = label, fontSize = 15.sp, color = Color.Gray, modifier = Modifier.width(60.dp))
         Spacer(modifier = Modifier.weight(1f))
-        Text(
-            text = value,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            color = if (value.contains("选择")) Color.LightGray else TextTitle,
-            textAlign = TextAlign.End
-        )
-        Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray, modifier = Modifier.size(20.dp))
+        Text(text = value, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextTitle, textAlign = TextAlign.End, modifier = Modifier.padding(end = if (showArrow) 0.dp else 4.dp))
+        if (showArrow) Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray, modifier = Modifier.size(20.dp))
     }
 }

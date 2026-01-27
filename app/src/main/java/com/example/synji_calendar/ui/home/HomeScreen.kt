@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -91,7 +92,8 @@ fun HomeScreen(
     onAddSchedule: (LocalDate) -> Unit = {},
     onEditSchedule: (Schedule) -> Unit = {},
     onGroupClick: () -> Unit = {},
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    onMoreClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -246,7 +248,7 @@ fun HomeScreen(
                     }
                 }
                 ActionItem(Icons.Outlined.Groups, "群组") { onGroupClick() }
-                ActionItem(Icons.Default.Add, "更多") { }
+                ActionItem(Icons.Default.MoreHoriz, "更多") { onMoreClick() }
             }
 
             Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)) {

@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,6 +64,16 @@ fun AuthDialogContent(
         }
     }
 
+    // 辅助函数：处理发送验证码
+    fun handleSendCode() {
+        if (phoneNumber.length == 11) {
+            authViewModel.sendVerificationCode(phoneNumber)
+            countdown = 60 // v2.0 规范：立即开启60秒限制
+        } else {
+            Toast.makeText(context, "请输入正确的11位手机号", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // 登录框主体
     Surface(
         modifier = Modifier
@@ -73,7 +85,7 @@ fun AuthDialogContent(
         shadowElevation = 8.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Header: 移除了返回和关闭按钮
+            // Header
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -106,10 +118,11 @@ fun AuthDialogContent(
                         Spacer(modifier = Modifier.width(12.dp))
                         BasicTextField(
                             value = phoneNumber, 
-                            onValueChange = { phoneNumber = it }, 
+                            onValueChange = { if(it.length <= 11) phoneNumber = it }, 
                             modifier = Modifier.weight(1f),
                             textStyle = TextStyle(fontSize = 16.sp, color = TextTitle),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             decorationBox = { innerTextField ->
                                 Box(contentAlignment = Alignment.CenterStart) {
                                     if (phoneNumber.isEmpty()) {
@@ -129,10 +142,11 @@ fun AuthDialogContent(
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, end = 6.dp)) {
                         BasicTextField(
                             value = verificationCode, 
-                            onValueChange = { verificationCode = it }, 
+                            onValueChange = { if(it.length <= 6) verificationCode = it }, 
                             modifier = Modifier.weight(1f),
                             textStyle = TextStyle(fontSize = 16.sp, color = TextTitle),
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             decorationBox = { innerTextField ->
                                 Box(contentAlignment = Alignment.CenterStart) {
                                     if (verificationCode.isEmpty()) {
@@ -147,8 +161,9 @@ fun AuthDialogContent(
                                 CircularProgressIndicator(color = BgGradientStart, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                             } else {
                                 TextButton(
-                                    onClick = { if (phoneNumber.length == 11) { authViewModel.sendVerificationCode(phoneNumber); countdown = 60 } else { Toast.makeText(context, "请输入正确的手机号", Toast.LENGTH_SHORT).show() } },
-                                    enabled = countdown == 0, colors = ButtonDefaults.textButtonColors(contentColor = BgGradientStart, disabledContentColor = Color.Gray)
+                                    onClick = { handleSendCode() },
+                                    enabled = countdown == 0,
+                                    colors = ButtonDefaults.textButtonColors(contentColor = BgGradientStart, disabledContentColor = Color.Gray)
                                 ) { Text(text = if (countdown > 0) "${countdown}s" else "获取验证码", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                             }
                         }
@@ -173,8 +188,8 @@ fun AuthDialogContent(
                 // Login Button
                 Box(
                     modifier = Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp))
-                        .background(brush = Brush.horizontalGradient(if (isAgreed && phoneNumber.isNotEmpty() && verificationCode.isNotEmpty()) listOf(BgGradientStart, BgGradientEnd) else listOf(Color.LightGray, Color.LightGray)))
-                        .clickable(enabled = isAgreed && phoneNumber.isNotEmpty() && verificationCode.isNotEmpty() && !uiState.isLoading) { authViewModel.login(phoneNumber, verificationCode) },
+                        .background(brush = Brush.horizontalGradient(if (isAgreed && phoneNumber.length == 11 && verificationCode.isNotEmpty()) listOf(BgGradientStart, BgGradientEnd) else listOf(Color.LightGray, Color.LightGray)))
+                        .clickable(enabled = isAgreed && phoneNumber.length == 11 && verificationCode.isNotEmpty() && !uiState.isLoading) { authViewModel.login(phoneNumber, verificationCode) },
                     contentAlignment = Alignment.Center
                 ) {
                     if (uiState.isLoading && verificationCode.isNotEmpty()) {

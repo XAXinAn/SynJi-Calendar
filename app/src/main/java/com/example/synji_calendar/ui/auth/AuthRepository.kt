@@ -33,7 +33,7 @@ class AuthRepository {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     
     // 根据最新服务器 IP 更新服务地址
-    private val baseUrl = "http://192.168.0.100:8080"
+    private val baseUrl = "http://192.168.43.227:8080"
 
     suspend fun sendVerifyCode(phoneNumber: String): ApiResponse<Unit> = withContext(Dispatchers.IO) {
         val requestBody = gson.toJson(mapOf("phoneNumber" to phoneNumber)).toRequestBody(jsonMediaType)
@@ -51,6 +51,13 @@ class AuthRepository {
 
     suspend fun getUserInfo(token: String): ApiResponse<UserInfo> = withContext(Dispatchers.IO) {
         val request = Request.Builder().url("$baseUrl/api/user/info").get().header("Authorization", token).build()
+        val type = object : TypeToken<ApiResponse<UserInfo>>() {}.type
+        executeRequest(request, type)
+    }
+
+    suspend fun updateUserInfo(token: String, nickname: String): ApiResponse<UserInfo> = withContext(Dispatchers.IO) {
+        val requestBody = gson.toJson(mapOf("nickname" to nickname)).toRequestBody(jsonMediaType)
+        val request = Request.Builder().url("$baseUrl/api/user/update").put(requestBody).header("Authorization", token).build()
         val type = object : TypeToken<ApiResponse<UserInfo>>() {}.type
         executeRequest(request, type)
     }

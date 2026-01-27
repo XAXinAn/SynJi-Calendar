@@ -21,6 +21,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.synji_calendar.ui.group.GroupInfo
+import com.example.synji_calendar.ui.group.GroupViewModel
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -31,10 +33,15 @@ import java.time.YearMonth
 fun BelongingSelectionScreen(
     currentBelonging: String,
     onSelected: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    groupViewModel: GroupViewModel
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    val allOptions = listOf("个人", "5群", "工作", "生活")
+    val groupUiState by groupViewModel.uiState.collectAsState()
+    
+    val allOptions = remember(groupUiState.groups) {
+        listOf("个人") + groupUiState.groups.map { it.name }
+    }
     val filteredOptions = allOptions.filter { it.contains(searchQuery, ignoreCase = true) }
 
     Scaffold(
@@ -81,8 +88,16 @@ fun BelongingSelectionScreen(
                         onClick = { onSelected(option) }
                     ) {
                         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(40.dp).background(CalendarSelectBlue.copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Person, null, tint = CalendarSelectBlue, modifier = Modifier.size(20.dp))
+                            Box(modifier = Modifier.size(40.dp).background(
+                                if (option == "个人") CalendarSelectBlue.copy(alpha = 0.1f) else Color(0xFF52C41A).copy(alpha = 0.1f), 
+                                CircleShape
+                            ), contentAlignment = Alignment.Center) {
+                                Icon(
+                                    if (option == "个人") Icons.Default.Person else Icons.Default.Groups, 
+                                    null, 
+                                    tint = if (option == "个人") CalendarSelectBlue else Color(0xFF52C41A), 
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Text(text = option, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = TextTitle, modifier = Modifier.weight(1f))

@@ -3,7 +3,6 @@ package com.example.synji_calendar.ui.home
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -90,7 +89,9 @@ fun HomeScreen(
     token: String,
     homeViewModel: HomeViewModel = viewModel(),
     onAddSchedule: (LocalDate) -> Unit = {},
-    onEditSchedule: (Schedule) -> Unit = {}
+    onEditSchedule: (Schedule) -> Unit = {},
+    onGroupClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -222,7 +223,11 @@ fun HomeScreen(
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
-                Surface(modifier = Modifier.size(40.dp), shape = CircleShape, color = IconColor) {
+                Surface(
+                    modifier = Modifier.size(40.dp).clickable { onProfileClick() },
+                    shape = CircleShape,
+                    color = IconColor
+                ) {
                     Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(24.dp)) }
                 }
             }
@@ -240,7 +245,7 @@ fun HomeScreen(
                         overlayPermissionLauncher.launch(intent)
                     }
                 }
-                ActionItem(Icons.Outlined.Groups, "群组") { }
+                ActionItem(Icons.Outlined.Groups, "群组") { onGroupClick() }
                 ActionItem(Icons.Default.Add, "更多") { }
             }
 

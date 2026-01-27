@@ -1,7 +1,6 @@
 package com.example.synji_calendar
 
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -28,6 +27,14 @@ import com.example.synji_calendar.ui.home.Schedule
 import com.example.synji_calendar.ui.home.BgGradientStart
 import com.example.synji_calendar.ui.auth.AuthDialogContent
 import com.example.synji_calendar.ui.auth.AuthViewModel
+import com.example.synji_calendar.ui.group.GroupScreen
+import com.example.synji_calendar.ui.group.GroupDetailScreen
+import com.example.synji_calendar.ui.group.GroupInfo
+import com.example.synji_calendar.ui.group.GroupViewModel
+import com.example.synji_calendar.ui.group.CreateGroupScreen
+import com.example.synji_calendar.ui.group.JoinGroupScreen
+import com.example.synji_calendar.ui.profile.ProfileScreen
+import com.example.synji_calendar.ui.profile.EditProfileFieldScreen
 import com.example.synji_calendar.ui.theme.SynJiCalendarTheme
 import java.time.LocalDate
 
@@ -39,30 +46,44 @@ class MainActivity : ComponentActivity() {
             SynJiCalendarTheme {
                 val authViewModel: AuthViewModel = viewModel()
                 val authUiState by authViewModel.uiState.collectAsState()
+                val groupViewModel: GroupViewModel = viewModel()
                 
                 var currentScreen by remember { mutableStateOf("home") }
                 var targetDate by remember { mutableStateOf(LocalDate.now()) }
                 var editingSchedule by remember { mutableStateOf<Schedule?>(null) }
+                var selectedGroup by remember { mutableStateOf<GroupInfo?>(null) }
+                
+                // 个人中心编辑相关状态
+                var editingField by remember { mutableStateOf("") }
+                var editingFieldValue by remember { mutableStateOf("") }
                 
                 val focusManager = LocalFocusManager.current
 
                 val navigateBack: () -> Unit = {
                     focusManager.clearFocus()
-                    currentScreen = "home"
+                    currentScreen = when(currentScreen) {
+                        "group_detail" -> "group_list"
+                        "group_create" -> "group_list"
+                        "group_join" -> "group_list"
+                        "group_list" -> "home"
+                        "profile" -> "home"
+                        "edit_profile" -> "profile"
+                        else -> "home"
+                    }
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // 1. 主内容层：仅在非 Token 检查期间渲染
+                    // 1. 主内容层
                     if (!authUiState.isCheckingToken) {
                         AnimatedContent(
                             targetState = currentScreen,
                             transitionSpec = {
-                                if (targetState == "add" || targetState == "detail") {
-                                    slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(200, easing = FastOutSlowInEasing)) togetherWith
-                                    slideOutHorizontally(targetOffsetX = { -it / 4 }, animationSpec = tween(200, easing = FastOutSlowInEasing))
-                                } else {
+                                if (targetState == "home") {
                                     slideInHorizontally(initialOffsetX = { -it / 4 }, animationSpec = tween(200, easing = FastOutSlowInEasing)) togetherWith
                                     slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(200, easing = FastOutSlowInEasing))
+                                } else {
+                                    slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(200, easing = FastOutSlowInEasing)) togetherWith
+                                    slideOutHorizontally(targetOffsetX = { -it / 4 }, animationSpec = tween(200, easing = FastOutSlowInEasing))
                                 }
                             },
                             label = "screen_transition"
@@ -71,7 +92,9 @@ class MainActivity : ComponentActivity() {
                                 "home" -> HomeScreen(
                                     token = authUiState.token ?: "",
                                     onAddSchedule = { date -> targetDate = date; currentScreen = "add" },
-                                    onEditSchedule = { schedule -> editingSchedule = schedule; currentScreen = "detail" }
+                                    onEditSchedule = { schedule -> editingSchedule = schedule; currentScreen = "detail" },
+                                    onGroupClick = { currentScreen = "group_list" },
+                                    onProfileClick = { currentScreen = "profile" }
                                 )
                                 "add" -> {
                                     AddScheduleScreen(token = authUiState.token ?: "", initialDate = targetDate, onBack = navigateBack)
@@ -83,11 +106,80 @@ class MainActivity : ComponentActivity() {
                                     }
                                     BackHandler { navigateBack() }
                                 }
+                                "group_list" -> {
+                                    GroupScreen(
+                                        token = authUiState.token ?: "",
+                                        viewModel = groupViewModel,
+                                        onBack = navigateBack,
+                                        onGroupClick = { group ->
+                                            selectedGroup = group
+                                            currentScreen = "group_detail"
+                                        },
+                                        onCreateGroup = { currentScreen = "group_create" },
+                                        onJoinGroup = { currentScreen = "group_join" }
+                                    )
+                                    BackHandler { navigateBack() }
+                                }
+                                "group_create" -> {
+                                    CreateGroupScreen(
+                                        token = authUiState.token ?: "",
+                                        viewModel = groupViewModel,
+                                        onBack = navigateBack,
+                                        onSuccess = navigateBack
+                                    )
+                                    BackHandler { navigateBack() }
+                                }
+                                "group_join" -> {
+                                    JoinGroupScreen(
+                                        token = authUiState.token ?: "",
+                                        viewModel = groupViewModel,
+                                        onBack = navigateBack,
+                                        onSuccess = navigateBack
+                                    )
+                                    BackHandler { navigateBack() }
+                                }
+                                "group_detail" -> {
+                                    GroupDetailScreen(
+                                        group = selectedGroup,
+                                        onBack = navigateBack
+                                    )
+                                    BackHandler { navigateBack() }
+                                }
+                                "profile" -> {
+                                    ProfileScreen(
+                                        user = authUiState.user,
+                                        onBack = navigateBack,
+                                        onEditField = { field, value ->
+                                            editingField = field
+                                            editingFieldValue = value
+                                            currentScreen = "edit_profile"
+                                        },
+                                        onLogout = {
+                                            authViewModel.logout()
+                                            currentScreen = "home"
+                                        }
+                                    )
+                                    BackHandler { navigateBack() }
+                                }
+                                "edit_profile" -> {
+                                    EditProfileFieldScreen(
+                                        title = if (editingField == "nickname") "名字" else "信息",
+                                        initialValue = editingFieldValue,
+                                        onBack = navigateBack,
+                                        onSave = { newValue ->
+                                            if (editingField == "nickname") {
+                                                authViewModel.updateNickname(newValue)
+                                            }
+                                            navigateBack()
+                                        }
+                                    )
+                                    BackHandler { navigateBack() }
+                                }
                             }
                         }
                     }
 
-                    // 2. 登录注册遮罩层：使用 Crossfade 确保切换稳健，不闪退
+                    // 2. 登录注册遮罩层
                     Crossfade(targetState = !authUiState.isLoggedIn && !authUiState.isCheckingToken, label = "auth_overlay") { showAuth ->
                         if (showAuth) {
                             Box(
@@ -99,14 +191,14 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 AuthDialogContent(
                                     onDismiss = { },
-                                    onLoginSuccess = { /* 状态由 authUiState 驱动 */ },
+                                    onLoginSuccess = { },
                                     authViewModel = authViewModel
                                 )
                             }
                         }
                     }
                     
-                    // 3. 启动时的全屏加载占位
+                    // 3. 启动加载
                     if (authUiState.isCheckingToken) {
                         Box(modifier = Modifier.fillMaxSize().background(Color.White), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(color = BgGradientStart)

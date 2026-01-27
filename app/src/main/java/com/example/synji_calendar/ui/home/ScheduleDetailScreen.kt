@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.synji_calendar.ui.group.GroupViewModel
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -35,12 +37,16 @@ fun ScheduleDetailScreen(
     token: String,
     schedule: Schedule,
     onBack: () -> Unit = {},
-    homeViewModel: HomeViewModel = viewModel()
+    homeViewModel: HomeViewModel = viewModel(),
+    groupViewModel: GroupViewModel = viewModel()
 ) {
     // 关键修复点：一进入详情页，立即触发标记已读逻辑
     LaunchedEffect(Unit) {
         if (!schedule.isViewed) {
             homeViewModel.markAsViewed(token, schedule)
+        }
+        if (token.isNotEmpty()) {
+            groupViewModel.loadGroups(token)
         }
     }
 
@@ -282,7 +288,7 @@ fun ScheduleDetailScreen(
                 ) {
                     Column(modifier = Modifier.padding(24.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            DetailIconWithBg(Icons.Default.Notes)
+                            DetailIconWithBg(Icons.AutoMirrored.Filled.Notes)
                             Spacer(modifier = Modifier.width(12.dp))
                             Text("备注", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextTitle)
                         }
@@ -319,7 +325,8 @@ fun ScheduleDetailScreen(
                     selectedBelonging = it
                     isSelectingBelonging = false
                 },
-                onBack = { isSelectingBelonging = false }
+                onBack = { isSelectingBelonging = false },
+                groupViewModel = groupViewModel
             )
         }
     }

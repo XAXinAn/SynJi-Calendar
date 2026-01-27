@@ -64,7 +64,7 @@ class HomeRepository {
         .create()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    private val baseUrl = "http://192.168.0.100:8080"
+    private val baseUrl = "http://192.168.43.227:8080"
 
     suspend fun ping(): ApiResponse<String> = withContext(Dispatchers.IO) {
         val request = Request.Builder().url("$baseUrl/api/ping").get().build()

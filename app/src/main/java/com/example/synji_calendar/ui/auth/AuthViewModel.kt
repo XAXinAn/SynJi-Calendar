@@ -98,6 +98,25 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateNickname(nickname: String) {
+        val token = _uiState.value.token ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            val response = repository.updateUserInfo(token, nickname)
+            if (response.code == 200 && response.data != null) {
+                _uiState.value = _uiState.value.copy(
+                    user = response.data,
+                    isLoading = false
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    error = response.message,
+                    isLoading = false
+                )
+            }
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }

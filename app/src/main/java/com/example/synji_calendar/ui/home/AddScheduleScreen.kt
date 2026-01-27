@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.synji_calendar.ui.group.GroupViewModel
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -35,7 +37,8 @@ fun AddScheduleScreen(
     token: String,
     initialDate: LocalDate = LocalDate.now(),
     onBack: () -> Unit = {},
-    homeViewModel: HomeViewModel = viewModel()
+    homeViewModel: HomeViewModel = viewModel(),
+    groupViewModel: GroupViewModel = viewModel()
 ) {
     var title by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
@@ -53,6 +56,11 @@ fun AddScheduleScreen(
     
     val isLoading by homeViewModel.isLoading.collectAsState()
     val sheetState = rememberModalBottomSheetState()
+
+    // 确保群组列表已加载
+    LaunchedEffect(token) {
+        if (token.isNotEmpty()) groupViewModel.loadGroups(token)
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -264,7 +272,7 @@ fun AddScheduleScreen(
                 ) {
                     Column(modifier = Modifier.padding(24.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            AddIconWithBg(Icons.Default.Notes)
+                            AddIconWithBg(Icons.AutoMirrored.Filled.Notes)
                             Spacer(modifier = Modifier.width(12.dp))
                             Text("备注", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextTitle)
                         }
@@ -301,7 +309,8 @@ fun AddScheduleScreen(
                     selectedBelonging = it
                     isSelectingBelonging = false
                 },
-                onBack = { isSelectingBelonging = false }
+                onBack = { isSelectingBelonging = false },
+                groupViewModel = groupViewModel
             )
         }
     }

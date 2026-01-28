@@ -1,19 +1,31 @@
 package com.example.synji_calendar.ui.auth
 
+import android.util.Log
 import com.google.gson.*
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 class AuthRepository {
-    private val client = OkHttpClient()
+    // 增加 Cookie 存储，解决后端使用 Session 导致验证码找不到的问题
+    private val cookieStore = mutableMapOf<String, List<Cookie>>()
+    
+    private val client = OkHttpClient.Builder()
+        .cookieJar(object : CookieJar {
+            override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+                cookieStore[url.host] = cookies
+            }
+            override fun loadForRequest(url: HttpUrl): List<Cookie> {
+                return cookieStore[url.host] ?: listOf()
+            }
+        })
+        .build()
     
     private val gson = GsonBuilder()
         .registerTypeAdapter(LocalDate::class.java, JsonSerializer<LocalDate> { src, _, _ ->
@@ -31,20 +43,30 @@ class AuthRepository {
         .create()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    
-    // 根据最新服务器 IP 更新服务地址
     private val baseUrl = "http://192.168.43.227:8080"
 
-    suspend fun sendVerifyCode(phoneNumber: String): ApiResponse<Unit> = withContext(Dispatchers.IO) {
-        val requestBody = gson.toJson(mapOf("phoneNumber" to phoneNumber)).toRequestBody(jsonMediaType)
+    suspend fun sendVerifyCode(phoneNumber: String): ApiResponse<String> = withContext(Dispatchers.IO) {
+        val cleanPhone = phoneNumber.trim()
+        val requestBody = gson.toJson(mapOf("phoneNumber" to cleanPhone)).toRequestBody(jsonMediaType)
         val request = Request.Builder().url("$baseUrl/api/auth/send-code").post(requestBody).build()
-        val type = object : TypeToken<ApiResponse<Unit>>() {}.type
+        val type = object : TypeToken<ApiResponse<String>>() {}.type
         executeRequest(request, type)
     }
 
     suspend fun login(phoneNumber: String, verifyCode: String): ApiResponse<LoginData> = withContext(Dispatchers.IO) {
-        // v2.0 修正：将 verifyCode 改为 code 以对齐文档
-        val requestBody = gson.toJson(mapOf("phoneNumber" to phoneNumber, "code" to verifyCode)).toRequestBody(jsonMediaType)
+        val cleanPhone = phoneNumber.trim()
+        val cleanCode = verifyCode.trim()
+        
+        // 双字段保险：同时发送 code 和 verifyCode
+        val payload = mapOf(
+            "phoneNumber" to cleanPhone,
+            "code" to cleanCode,
+            "verifyCode" to cleanCode
+        )
+        
+        Log.d("AuthRepository", "发送登录请求: $payload")
+        
+        val requestBody = gson.toJson(payload).toRequestBody(jsonMediaType)
         val request = Request.Builder().url("$baseUrl/api/auth/login").post(requestBody).build()
         val type = object : TypeToken<ApiResponse<LoginData>>() {}.type
         executeRequest(request, type)
@@ -67,9 +89,11 @@ class AuthRepository {
         return try {
             client.newCall(request).execute().use { response ->
                 val bodyString = response.body?.string() ?: ""
+                Log.d("AuthRepository", "接口: ${request.url}, 响应: $bodyString")
                 gson.fromJson(bodyString, responseType)
             }
         } catch (e: Exception) {
+            Log.e("AuthRepository", "网络请求失败", e)
             ApiResponse(500, "网络异常: ${e.message}", null)
         }
     }

@@ -15,6 +15,7 @@ data class AuthUiState(
     val phoneNumber: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
+    val verificationCodeTip: String? = null, // 新增：持久显示的验证码提示
     val user: UserInfo? = null,
     val isCheckingToken: Boolean = true,
     val isSplashVisible: Boolean = true
@@ -33,10 +34,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun initializeApp() {
         viewModelScope.launch {
-            // 启动时同时开始检查 Token 和 5秒计时
             val startTime = System.currentTimeMillis()
-            
-            // 1. 检查本地 Token
             val savedToken = sharedPrefs.getString("token", null)
             if (savedToken != null) {
                 val response = repository.getUserInfo(savedToken)
@@ -50,19 +48,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     sharedPrefs.edit().remove("token").apply()
                 }
             }
-            
-            // 2. 计算剩余需要等待的时间，确保总时长至少 5000ms
             val elapsedTime = System.currentTimeMillis() - startTime
             val remainingTime = 5000L - elapsedTime
-            if (remainingTime > 0) {
-                delay(remainingTime)
-            }
-            
-            // 3. 结束初始化
-            _uiState.value = _uiState.value.copy(
-                isCheckingToken = false,
-                isSplashVisible = false
-            )
+            if (remainingTime > 0) delay(remainingTime)
+            _uiState.value = _uiState.value.copy(isCheckingToken = false, isSplashVisible = false)
         }
     }
 
@@ -73,20 +62,23 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            // 重新获取时，先清空旧的提示
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null, verificationCodeTip = null)
             val response = repository.sendVerifyCode(phone)
             
-            val displayMsg = when {
-                response.code == 200 -> "内测期间验证码请填写：111111"
-                response.code == 500 -> "短信发送失败，请稍后重试"
-                else -> response.message ?: "发送失败，请稍后重试"
+            if (response.code == 200) {
+                val codeFromServer = response.data?.toString() ?: "111111"
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    phoneNumber = phone,
+                    verificationCodeTip = "内测验证码：$codeFromServer" // 设置持久提示
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = response.message ?: "发送失败，请稍后重试"
+                )
             }
-
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                phoneNumber = phone,
-                error = displayMsg
-            )
         }
     }
 
@@ -102,7 +94,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     isLoggedIn = true,
                     token = response.data.token,
                     user = response.data.user,
-                    error = null
+                    error = null,
+                    verificationCodeTip = null // 登录成功清空提示
                 )
             } else {
                 _uiState.value = _uiState.value.copy(
@@ -119,15 +112,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(isLoading = true)
             val response = repository.updateUserInfo(token, nickname)
             if (response.code == 200 && response.data != null) {
-                _uiState.value = _uiState.value.copy(
-                    user = response.data,
-                    isLoading = false
-                )
+                _uiState.value = _uiState.value.copy(user = response.data, isLoading = false)
             } else {
-                _uiState.value = _uiState.value.copy(
-                    error = response.message,
-                    isLoading = false
-                )
+                _uiState.value = _uiState.value.copy(error = response.message, isLoading = false)
             }
         }
     }

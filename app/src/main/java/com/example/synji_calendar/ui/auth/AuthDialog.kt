@@ -64,28 +64,25 @@ fun AuthDialogContent(
         }
     }
 
-    // 辅助函数：处理发送验证码
     fun handleSendCode() {
         if (phoneNumber.length == 11) {
             authViewModel.sendVerificationCode(phoneNumber)
-            countdown = 60 // v2.0 规范：立即开启60秒限制
+            countdown = 60
         } else {
             Toast.makeText(context, "请输入正确的11位手机号", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // 登录框主体
     Surface(
         modifier = Modifier
             .fillMaxWidth(0.85f)
             .wrapContentHeight()
-            .clickable(enabled = false) { }, // 防止点击穿透
+            .clickable(enabled = false) { },
         shape = RoundedCornerShape(20.dp),
         color = Color.White,
         shadowElevation = 8.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Header
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -106,10 +103,9 @@ fun AuthDialogContent(
             }
 
             Column(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp).fillMaxWidth(),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp).fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Phone Input
                 Surface(modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(12.dp), color = ContainerGrey, border = BorderStroke(0.5.dp, Color.LightGray.copy(alpha = 0.3f))) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 16.dp)) {
                         Text("+86", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextTitle)
@@ -137,7 +133,17 @@ fun AuthDialogContent(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Code Input
+                // v2.0 持久化验证码提示显示
+                uiState.verificationCodeTip?.let { tip ->
+                    Text(
+                        text = tip,
+                        color = BgGradientStart,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
                 Surface(modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(12.dp), color = ContainerGrey, border = BorderStroke(0.5.dp, Color.LightGray.copy(alpha = 0.3f))) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, end = 6.dp)) {
                         BasicTextField(
@@ -172,7 +178,6 @@ fun AuthDialogContent(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Agreement
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                         Checkbox(checked = isAgreed, onCheckedChange = { isAgreed = it }, colors = CheckboxDefaults.colors(checkedColor = BgGradientStart), modifier = Modifier.size(20.dp))
@@ -185,7 +190,6 @@ fun AuthDialogContent(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Login Button
                 Box(
                     modifier = Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(28.dp))
                         .background(brush = Brush.horizontalGradient(if (isAgreed && phoneNumber.length == 11 && verificationCode.isNotEmpty()) listOf(BgGradientStart, BgGradientEnd) else listOf(Color.LightGray, Color.LightGray)))

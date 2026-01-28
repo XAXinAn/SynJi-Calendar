@@ -3,6 +3,7 @@ package com.example.synji_calendar.ui.home
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -18,12 +19,14 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
@@ -40,6 +43,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -103,11 +108,15 @@ fun HomeScreen(
     val holidayMap by homeViewModel.holidays.collectAsState()
     val monthDataMap by homeViewModel.currentMonthData.collectAsState()
     val isLoading by homeViewModel.isLoading.collectAsState()
+    val allSchedules by homeViewModel.allSchedules.collectAsState()
     
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showHistoryList by remember { mutableStateOf(false) }
+    var showSearchOverlay by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    val searchFocusRequester = remember { FocusRequester() }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -211,8 +220,13 @@ fun HomeScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().background(brush = Brush.verticalGradient(listOf(BgGradientStart, BgGradientEnd), 0f, 1000f))) {
+            // --- Search Bar Header ---
             Row(modifier = Modifier.fillMaxWidth().padding(top = 48.dp, start = 20.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(modifier = Modifier.weight(1f).height(44.dp), shape = RoundedCornerShape(22.dp), color = Color.White) {
+                Surface(
+                    modifier = Modifier.weight(1f).height(44.dp).clickable { showSearchOverlay = true },
+                    shape = RoundedCornerShape(22.dp),
+                    color = Color.White
+                ) {
                     Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Search, null, tint = Color(0xFF888888), modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(10.dp))
@@ -312,6 +326,90 @@ fun HomeScreen(
             }
         }
 
+        // --- 全屏搜索层 ---
+        AnimatedVisibility(
+            visible = showSearchOverlay,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            BackHandler { showSearchOverlay = false; searchQuery = "" }
+            
+            Surface(modifier = Modifier.fillMaxSize(), color = ContainerGrey) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Search Input Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            shape = RoundedCornerShape(22.dp),
+                            color = Color.White,
+                            border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.3f))
+                        ) {
+                            Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Search, null, tint = BrandOrange, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                BasicTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    modifier = Modifier.weight(1f).focusRequester(searchFocusRequester),
+                                    textStyle = TextStyle(fontSize = 15.sp, color = TextTitle),
+                                    singleLine = true,
+                                    decorationBox = { innerTextField ->
+                                        if (searchQuery.isEmpty()) Text("输入日程标题搜索", color = Color.Gray.copy(alpha = 0.5f), fontSize = 15.sp)
+                                        innerTextField()
+                                    }
+                                )
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                        Icon(Icons.Default.Close, null, tint = Color.Gray)
+                                    }
+                                }
+                            }
+                        }
+                        TextButton(onClick = { showSearchOverlay = false; searchQuery = "" }) {
+                            Text("取消", color = Color.Gray)
+                        }
+                    }
+
+                    // 搜索结果列表
+                    val filteredSchedules = remember(searchQuery, allSchedules) {
+                        if (searchQuery.isBlank()) emptyList()
+                        else allSchedules.filter { it.title.contains(searchQuery, ignoreCase = true) }
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(filteredSchedules) { schedule ->
+                            SearchScheduleResultItem(
+                                schedule = schedule,
+                                onClick = {
+                                    showSearchOverlay = false
+                                    searchQuery = ""
+                                    onEditSchedule(schedule)
+                                }
+                            )
+                        }
+                        if (searchQuery.isNotEmpty() && filteredSchedules.isEmpty()) {
+                            item {
+                                Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
+                                    Text("未找到相关日程", color = Color.Gray)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            LaunchedEffect(showSearchOverlay) {
+                if (showSearchOverlay) searchFocusRequester.requestFocus()
+            }
+        }
+
+        // --- 添加日程记录页面 ---
         AnimatedVisibility(
             visible = showHistoryList,
             enter = slideInHorizontally(initialOffsetX = { -it }),
@@ -328,7 +426,6 @@ fun HomeScreen(
                         }
                         Text("添加日程记录", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
                     }
-                    val allSchedules by homeViewModel.allSchedules.collectAsState()
                     val historySchedules = remember(allSchedules) {
                         allSchedules.filter { it.isAiGenerated }.sortedByDescending { it.id ?: 0L }
                     }
@@ -354,6 +451,40 @@ fun HomeScreen(
         }
         
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+@Composable
+fun SearchScheduleResultItem(schedule: Schedule, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = schedule.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextTitle)
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = schedule.date.format(DateTimeFormatter.ofPattern("yyyy年MM月dd日")),
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (schedule.isAllDay) "全天" else schedule.time.format(DateTimeFormatter.ofPattern("HH:mm")),
+                        fontSize = 13.sp,
+                        color = BrandOrange,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray)
+        }
     }
 }
 
@@ -436,7 +567,6 @@ fun ScheduleSection(
     val dateStr = "$prefix 农历${chineseMonthDigits}月${alias}${lunar.dayInChinese}"
     
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp, end = 4.dp)) {
-        // 日期信息行：包含日期文字和操作按钮
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -451,12 +581,10 @@ fun ScheduleSection(
             )
             
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 跳转按钮
                 IconButton(onClick = onJumpClick, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.CalendarMonth, null, tint = BrandOrange, modifier = Modifier.size(20.dp))
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                // “今”按钮
                 Surface(
                     modifier = Modifier.size(28.dp).clickable { onTodayClick() },
                     shape = CircleShape,

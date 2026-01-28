@@ -54,8 +54,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _schedules = MutableStateFlow<List<Schedule>>(emptyList())
     val allSchedules = _schedules.asStateFlow()
 
+    // 新增：后端搜索结果
+    private val _searchResults = MutableStateFlow<List<Schedule>>(emptyList())
+    val searchResults = _searchResults.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
+
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching = _isSearching.asStateFlow()
 
     private val _loadingMessage = MutableStateFlow("")
     val loadingMessage = _loadingMessage.asStateFlow()
@@ -123,11 +130,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // 新增：执行后端协同搜索
+    fun searchSchedules(token: String, query: String) {
+        if (token.isEmpty()) return
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            _isSearching.value = true
+            val response = repository.searchSchedules(token, query)
+            if (response.code == 200 && response.data != null) {
+                _searchResults.value = response.data
+            } else {
+                _searchResults.value = emptyList()
+            }
+            _isSearching.value = false
+        }
+    }
+
+    fun clearSearchResults() {
+        _searchResults.value = emptyList()
+    }
+
     fun addSchedule(token: String, schedule: Schedule, onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             _isLoading.value = true
             _loadingMessage.value = "正在保存日程..."
-            // 文档 4.2 & 5.2: 手动添加时 isAiGenerated=false, isViewed=true
             val scheduleToSave = schedule.copy(
                 id = null, 
                 isAiGenerated = false, 
@@ -206,7 +235,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val schedules = aiResponse.data
                     var successCount = 0
                     schedules.forEach { extraction ->
-                        // 文档 5.2: AI解析添加时 isAiGenerated=true, isViewed=false
                         val scheduleToSave = extraction.copy(
                             isAiGenerated = true, 
                             isViewed = false

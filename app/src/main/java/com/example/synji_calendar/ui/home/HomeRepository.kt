@@ -76,6 +76,16 @@ class HomeRepository {
         executeRequest(request, object : TypeToken<ApiResponse<List<Schedule>>>() {}.type)
     }
 
+    // 新增：后端协同搜索接口
+    suspend fun searchSchedules(token: String, keyword: String): ApiResponse<List<Schedule>> = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/schedule/search?keyword=$keyword")
+            .get()
+            .header("Authorization", token)
+            .build()
+        executeRequest(request, object : TypeToken<ApiResponse<List<Schedule>>>() {}.type)
+    }
+
     suspend fun addSchedule(token: String, schedule: Schedule): ApiResponse<Unit> = withContext(Dispatchers.IO) {
         val requestBody = gson.toJson(schedule).toRequestBody(jsonMediaType)
         val request = Request.Builder().url("$baseUrl/api/schedule/add").post(requestBody).header("Authorization", token).build()

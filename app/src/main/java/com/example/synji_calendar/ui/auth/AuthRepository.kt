@@ -43,7 +43,8 @@ class AuthRepository {
     }
 
     suspend fun login(phoneNumber: String, verifyCode: String): ApiResponse<LoginData> = withContext(Dispatchers.IO) {
-        val requestBody = gson.toJson(mapOf("phoneNumber" to phoneNumber, "verifyCode" to verifyCode)).toRequestBody(jsonMediaType)
+        // v2.0 修正：将 verifyCode 改为 code 以对齐文档
+        val requestBody = gson.toJson(mapOf("phoneNumber" to phoneNumber, "code" to verifyCode)).toRequestBody(jsonMediaType)
         val request = Request.Builder().url("$baseUrl/api/auth/login").post(requestBody).build()
         val type = object : TypeToken<ApiResponse<LoginData>>() {}.type
         executeRequest(request, type)

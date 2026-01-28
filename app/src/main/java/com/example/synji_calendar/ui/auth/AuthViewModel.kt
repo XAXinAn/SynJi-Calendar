@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -15,7 +16,8 @@ data class AuthUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val user: UserInfo? = null,
-    val isCheckingToken: Boolean = true
+    val isCheckingToken: Boolean = true,
+    val isSplashVisible: Boolean = true
 )
 
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
@@ -26,33 +28,41 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     val uiState = _uiState.asStateFlow()
 
     init {
-        checkPersistedToken()
+        initializeApp()
     }
 
-    /**
-     * 启动时检查本地是否存有 Token
-     */
-    private fun checkPersistedToken() {
-        val savedToken = sharedPrefs.getString("token", null)
-        if (savedToken != null) {
-            viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(isCheckingToken = true)
+    private fun initializeApp() {
+        viewModelScope.launch {
+            // 启动时同时开始检查 Token 和 5秒计时
+            val startTime = System.currentTimeMillis()
+            
+            // 1. 检查本地 Token
+            val savedToken = sharedPrefs.getString("token", null)
+            if (savedToken != null) {
                 val response = repository.getUserInfo(savedToken)
                 if (response.code == 200 && response.data != null) {
                     _uiState.value = _uiState.value.copy(
                         isLoggedIn = true,
                         token = savedToken,
-                        user = response.data,
-                        isCheckingToken = false
+                        user = response.data
                     )
                 } else {
-                    // Token 失效，清除本地存储
                     sharedPrefs.edit().remove("token").apply()
-                    _uiState.value = _uiState.value.copy(isCheckingToken = false)
                 }
             }
-        } else {
-            _uiState.value = _uiState.value.copy(isCheckingToken = false)
+            
+            // 2. 计算剩余需要等待的时间，确保总时长至少 5000ms
+            val elapsedTime = System.currentTimeMillis() - startTime
+            val remainingTime = 5000L - elapsedTime
+            if (remainingTime > 0) {
+                delay(remainingTime)
+            }
+            
+            // 3. 结束初始化
+            _uiState.value = _uiState.value.copy(
+                isCheckingToken = false,
+                isSplashVisible = false
+            )
         }
     }
 
@@ -66,7 +76,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             val response = repository.sendVerifyCode(phone)
             
-            // 内测阶段特殊处理：如果发送成功，直接提示用户验证码
             val displayMsg = when {
                 response.code == 200 -> "内测期间验证码请填写：111111"
                 response.code == 500 -> "短信发送失败，请稍后重试"
@@ -87,9 +96,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             val response = repository.login(phone, code)
             
             if (response.code == 200 && response.data != null) {
-                // 保存 Token 到本地
                 sharedPrefs.edit().putString("token", response.data.token).apply()
-                
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoggedIn = true,
@@ -131,6 +138,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         sharedPrefs.edit().remove("token").apply()
-        _uiState.value = AuthUiState(isCheckingToken = false)
+        _uiState.value = AuthUiState(isCheckingToken = false, isSplashVisible = false)
     }
 }

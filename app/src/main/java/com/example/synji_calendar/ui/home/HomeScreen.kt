@@ -76,7 +76,8 @@ val TextTitle = Color(0xFF333333)
 val RestBlue = Color(0xFF2B92E4)
 val WorkRed = Color(0xFFE66767)
 val CardTimeBg = Color(0xFF7FC8E5)
-val ImportantRed = Color(0xFFE94E4E) // 更鲜艳的紧急红
+val ImportantRed = Color(0xFFE94E4E)
+val BrandOrange = Color(0xFFF7B07E)
 
 data class DayDisplayInfo(
     val date: LocalDate,
@@ -291,7 +292,20 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        selectedDate?.let { ScheduleSection(it, homeViewModel, onEditSchedule) }
+                        selectedDate?.let {
+                            ScheduleSection(
+                                selectedDate = it,
+                                homeViewModel = homeViewModel,
+                                onEditSchedule = onEditSchedule,
+                                onJumpClick = { showWheelPicker = true },
+                                onTodayClick = {
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(initialPage)
+                                        selectedDate = LocalDate.now()
+                                    }
+                                }
+                            )
+                        }
                         Spacer(modifier = Modifier.height(80.dp))
                     }
                 }
@@ -337,11 +351,6 @@ fun HomeScreen(
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Color.White)
             }
-        }
-
-        Column(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            FloatingActionButton(onClick = { showWheelPicker = true }, containerColor = Color.White, contentColor = IconColor, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(56.dp)) { Icon(Icons.Default.CalendarMonth, null) }
-            FloatingActionButton(onClick = { scope.launch { pagerState.animateScrollToPage(initialPage); selectedDate = LocalDate.now() } }, containerColor = Color.White, contentColor = CalendarSelectBlue, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(56.dp)) { Text("今", fontSize = 20.sp, fontWeight = FontWeight.Bold) }
         }
         
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
@@ -399,7 +408,13 @@ fun LiveCalendar(monthData: List<DayDisplayInfo>, holidayMap: Map<LocalDate, Hol
 }
 
 @Composable
-fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEditSchedule: (Schedule) -> Unit) {
+fun ScheduleSection(
+    selectedDate: LocalDate, 
+    homeViewModel: HomeViewModel, 
+    onEditSchedule: (Schedule) -> Unit,
+    onJumpClick: () -> Unit,
+    onTodayClick: () -> Unit
+) {
     val allSchedules by homeViewModel.allSchedules.collectAsState()
     val schedules = remember(allSchedules, selectedDate) {
         allSchedules.filter { it.date == selectedDate }.sortedBy { if(it.isAllDay) LocalTime.MIN else it.time }
@@ -419,14 +434,48 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEdi
     val chineseMonthDigits = when(monthInt) { 1 -> "一"; 2 -> "二"; 3 -> "三"; 4 -> "四"; 5 -> "五"; 6 -> "六"; 7 -> "七"; 8 -> "八"; 9 -> "九"; 10 -> "十"; 11 -> "十一"; 12 -> "十二"; else -> "" }
     val alias = when(monthInt) { 1 -> "(正月)"; 11 -> "(冬月)"; 12 -> "(腊月)"; else -> "" }
     val dateStr = "$prefix 农历${chineseMonthDigits}月${alias}${lunar.dayInChinese}"
+    
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp, start = 4.dp, end = 4.dp)) {
-        Text(text = dateStr, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = Color(0xFF666666), modifier = Modifier.padding(bottom = 12.dp))
+        // 日期信息行：包含日期文字和操作按钮
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = dateStr, 
+                fontSize = 16.sp, 
+                fontWeight = FontWeight.Medium, 
+                color = Color(0xFF666666),
+                modifier = Modifier.weight(1f)
+            )
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // 跳转按钮
+                IconButton(onClick = onJumpClick, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.CalendarMonth, null, tint = BrandOrange, modifier = Modifier.size(20.dp))
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                // “今”按钮
+                Surface(
+                    modifier = Modifier.size(28.dp).clickable { onTodayClick() },
+                    shape = CircleShape,
+                    color = BrandOrange.copy(alpha = 0.1f),
+                    border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.2f))
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("今", color = BrandOrange, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
         if (schedules.isEmpty()) {
             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) { Text("暂无日程", color = Color.Gray, fontSize = 14.sp) }
         } else {
             schedules.forEach { schedule ->
                 ScheduleCard(schedule, onClick = { onEditSchedule(schedule) })
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
             }
         }
     }
@@ -434,112 +483,52 @@ fun ScheduleSection(selectedDate: LocalDate, homeViewModel: HomeViewModel, onEdi
 
 @Composable
 fun ScheduleCard(item: Schedule, onClick: () -> Unit = {}) {
-    // 渐变色定义
+    val normalGradient = Brush.verticalGradient(listOf(BrandOrange, BrandOrange.copy(alpha = 0.6f)))
     val urgentGradient = Brush.verticalGradient(listOf(ImportantRed, ImportantRed.copy(alpha = 0.6f)))
-    val normalGradient = Brush.verticalGradient(listOf(CalendarSelectBlue, CardTimeBg))
     val barGradient = if (item.isImportant) urgentGradient else normalGradient
-    val mainColor = if (item.isImportant) ImportantRed else CalendarSelectBlue
+    val accentColor = if (item.isImportant) ImportantRed else BrandOrange
 
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
         color = Color.White,
-        shadowElevation = 2.dp,
+        shadowElevation = 1.dp,
         border = BorderStroke(0.5.dp, Color(0xFFEEEEEE))
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            // 1. 左侧渐变装饰条 (6dp 宽，更显精致)
+        Row(
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 modifier = Modifier
-                    .width(6.dp)
-                    .height(80.dp)
-                    .align(Alignment.CenterStart)
-                    .offset(x = 10.dp)
+                    .width(4.dp)
+                    .fillMaxHeight()
                     .clip(CircleShape)
                     .background(barGradient)
             )
-
-            Column(modifier = Modifier.padding(start = 28.dp, end = 20.dp, top = 20.dp, bottom = 20.dp).fillMaxWidth()) {
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top,
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // 2. 标题与图标 (图标颜色联动)
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.EventNote,
-                            contentDescription = null,
-                            tint = mainColor,
-                            modifier = Modifier.size(26.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = item.title,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextTitle,
-                            maxLines = 2
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.EventNote, null, tint = accentColor, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = item.title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextTitle, maxLines = 1)
                     }
-
-                    // 3. 右上角时间胶囊
-                    Surface(
-                        color = if(item.isImportant) ImportantRed.copy(alpha = 0.1f) else ContainerGrey,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = if (item.isAllDay) "全天" else item.time.format(DateTimeFormatter.ofPattern("HH:mm")),
-                                color = mainColor,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                            Text(
-                                text = item.date.format(DateTimeFormatter.ofPattern("M月d日")),
-                                color = mainColor.copy(alpha = 0.7f),
-                                fontSize = 10.sp
-                            )
-                        }
-                    }
+                    Text(text = if (item.isAllDay) "全天" else item.time.format(DateTimeFormatter.ofPattern("HH:mm")), color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 4. 底部信息栏 (统一图标风格)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.LocationOn, null, tint = Color(0xFFBDBDBD), modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (item.location.isNullOrEmpty()) "待定" else item.location!!, 
-                            color = Color(0xFF757575), 
-                            fontSize = 14.sp,
-                            maxLines = 1
-                        )
-                    }
-                    
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Outlined.Assignment, null, tint = Color(0xFFBDBDBD), modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = item.belonging, 
-                            color = Color(0xFF757575), 
-                            fontSize = 14.sp,
-                            maxLines = 1
-                        )
-                    }
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.LocationOn, null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = if (item.location.isNullOrEmpty()) "待定" else item.location!!, color = Color.Gray, fontSize = 13.sp, maxLines = 1)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Icon(Icons.Outlined.Assignment, null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = item.belonging, color = Color.Gray, fontSize = 13.sp, maxLines = 1)
                 }
             }
         }

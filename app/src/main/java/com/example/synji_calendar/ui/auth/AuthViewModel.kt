@@ -66,9 +66,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             val response = repository.sendVerifyCode(phone)
             
-            // v2.0 更新：根据文档处理错误提示
-            val errorMsg = when {
-                response.code == 200 -> null
+            // 内测阶段特殊处理：如果发送成功，直接提示用户验证码
+            val displayMsg = when {
+                response.code == 200 -> "内测期间验证码请填写：111111"
                 response.code == 500 -> "短信发送失败，请稍后重试"
                 else -> response.message ?: "发送失败，请稍后重试"
             }
@@ -76,7 +76,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 phoneNumber = phone,
-                error = errorMsg
+                error = displayMsg
             )
         }
     }

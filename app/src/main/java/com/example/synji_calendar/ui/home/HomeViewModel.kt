@@ -13,6 +13,7 @@ import com.example.synji_calendar.utils.OcrEngine
 import com.google.gson.annotations.SerializedName
 import com.nlf.calendar.Solar
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -20,8 +21,28 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+
+/**
+ * 下拉刷新状态枚举
+ */
+enum class RefreshStatus {
+    IDLE, REFRESHING, COMPLETE
+}
+
+/**
+ * 日期显示模型
+ */
+data class DayDisplayInfo(
+    val date: LocalDate,
+    val subText: String,
+    val isToday: Boolean,
+    val isCurrentMonth: Boolean,
+    val holiday: Holiday?
+)
 
 /**
  * 根据 v1.7 接口文档对齐的日程数据模型
@@ -54,12 +75,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _schedules = MutableStateFlow<List<Schedule>>(emptyList())
     val allSchedules = _schedules.asStateFlow()
 
-    // 新增：后端搜索结果
     private val _searchResults = MutableStateFlow<List<Schedule>>(emptyList())
     val searchResults = _searchResults.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
+
+    private val _refreshStatus = MutableStateFlow(RefreshStatus.IDLE)
+    val refreshStatus = _refreshStatus.asStateFlow()
+
+    private val _lastUpdateRaw = MutableStateFlow<LocalDateTime?>(null)
+    val lastUpdateRaw = _lastUpdateRaw.asStateFlow()
 
     private val _isSearching = MutableStateFlow(false)
     val isSearching = _isSearching.asStateFlow()
@@ -116,21 +142,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (token.isEmpty()) return
         viewModelScope.launch {
             if (!isBackground) {
-                _isLoading.value = true
-                _loadingMessage.value = "正在同步日程..."
+                _refreshStatus.value = RefreshStatus.REFRESHING
             }
             val response = repository.fetchSchedules(token)
             if (response.code == 200 && response.data != null) {
                 _schedules.value = response.data
-                Log.d("HomeViewModel", "同步完成: ${response.data.size} 条日程")
+                _lastUpdateRaw.value = LocalDateTime.now()
             }
             if (!isBackground) {
-                _isLoading.value = false
+                _refreshStatus.value = RefreshStatus.COMPLETE
+                delay(1500)
+                _refreshStatus.value = RefreshStatus.IDLE
             }
         }
     }
 
-    // 新增：执行后端协同搜索
     fun searchSchedules(token: String, query: String) {
         if (token.isEmpty()) return
         if (query.isBlank()) {
@@ -157,11 +183,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             _loadingMessage.value = "正在保存日程..."
-            val scheduleToSave = schedule.copy(
-                id = null, 
-                isAiGenerated = false, 
-                isViewed = true 
-            )
+            val scheduleToSave = schedule.copy(id = null, isAiGenerated = false, isViewed = true)
             val response = repository.addSchedule(token, scheduleToSave)
             if (response.code == 200) {
                 refreshSchedules(token)
@@ -201,7 +223,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun markAsViewed(token: String, schedule: Schedule) {
         if (!schedule.isViewed) {
             viewModelScope.launch {
-                Log.d("HomeViewModel", "标记已读中: ${schedule.title}")
                 val response = repository.updateSchedule(token, schedule.copy(isViewed = true))
                 if (response.code == 200) {
                     refreshSchedules(token, isBackground = true)
@@ -235,10 +256,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     val schedules = aiResponse.data
                     var successCount = 0
                     schedules.forEach { extraction ->
-                        val scheduleToSave = extraction.copy(
-                            isAiGenerated = true, 
-                            isViewed = false
-                        )
+                        val scheduleToSave = extraction.copy(isAiGenerated = true, isViewed = false)
                         val addResp = repository.addSchedule(token, scheduleToSave)
                         if (addResp.code == 200) successCount++
                     }

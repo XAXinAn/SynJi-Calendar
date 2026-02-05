@@ -13,6 +13,7 @@ import com.example.synji_calendar.utils.OcrEngine
 import com.google.gson.annotations.SerializedName
 import com.nlf.calendar.Solar
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,6 +99,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _ocrResult = MutableStateFlow("")
     val ocrResult = _ocrResult.asStateFlow()
+
+    // 自动检测相关
+    private val _isAutoDetectionEnabled = MutableStateFlow(false)
+    val isAutoDetectionEnabled = _isAutoDetectionEnabled.asStateFlow()
+    private var autoDetectionJob: Job? = null
 
     private val calendarCache = mutableMapOf<YearMonth, List<DayDisplayInfo>>()
     private val _currentMonthData = MutableStateFlow<Map<YearMonth, List<DayDisplayInfo>>>(emptyMap())
@@ -204,7 +210,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (response.code == 200) {
                 refreshSchedules(token)
                 onComplete()
-            } else { _isLoading.value = false }
+            } else {
+                _message.emit("删除失败: ${response.message}")
+            }
+            _isLoading.value = false
         }
     }
 
@@ -216,7 +225,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (response.code == 200) {
                 refreshSchedules(token)
                 onComplete()
-            } else { _isLoading.value = false }
+            } else {
+                _message.emit("更新失败: ${response.message}")
+            }
+            _isLoading.value = false
         }
     }
 
@@ -228,6 +240,42 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     refreshSchedules(token, isBackground = true)
                 }
             }
+        }
+    }
+
+    /**
+     * 设置自动检测状态
+     */
+    fun setAutoDetectionEnabled(token: String, enabled: Boolean) {
+        _isAutoDetectionEnabled.value = enabled
+        if (enabled) {
+            autoDetectionJob?.cancel()
+            autoDetectionJob = viewModelScope.launch {
+                delay(5000)
+                val autoSchedule = Schedule(
+                    title = "岗前培训",
+                    date = LocalDate.of(2026, 2, 6),
+                    time = LocalTime.of(9, 30, 0),
+                    isAllDay = false,
+                    location = "门诊三楼志愿者之家",
+                    belonging = "个人",
+                    isImportant = false,
+                    notes = "",
+                    isAiGenerated = true,
+                    isViewed = false
+                )
+                _isLoading.value = true
+                _loadingMessage.value = "自动检测中..."
+                val response = repository.addSchedule(token, autoSchedule)
+                if (response.code == 200) {
+                    refreshSchedules(token)
+                    _message.emit("自动检测成功：岗前培训")
+                }
+                _isLoading.value = false
+                _isAutoDetectionEnabled.value = false // 执行完后自动关闭
+            }
+        } else {
+            autoDetectionJob?.cancel()
         }
     }
 

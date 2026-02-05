@@ -43,7 +43,7 @@ class AuthRepository {
         .create()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    private val baseUrl = "http://192.168.43.227:8080"
+    private val baseUrl = "http://localhost:8080"
 
     suspend fun sendVerifyCode(phoneNumber: String): ApiResponse<String> = withContext(Dispatchers.IO) {
         val cleanPhone = phoneNumber.trim()

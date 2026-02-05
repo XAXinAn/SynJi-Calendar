@@ -37,6 +37,7 @@ import com.example.synji_calendar.ui.home.Schedule
 import com.example.synji_calendar.ui.home.BgGradientStart
 import com.example.synji_calendar.ui.home.BgGradientEnd
 import com.example.synji_calendar.ui.home.MoreScreen
+import com.example.synji_calendar.ui.home.HomeViewModel
 import com.example.synji_calendar.ui.auth.AuthDialogContent
 import com.example.synji_calendar.ui.auth.AuthViewModel
 import com.example.synji_calendar.ui.group.*
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity() {
                 val authUiState by authViewModel.uiState.collectAsState()
                 val groupViewModel: GroupViewModel = viewModel()
                 val groupUiState by groupViewModel.uiState.collectAsState()
+                val homeViewModel: HomeViewModel = viewModel()
                 
                 var currentScreen by remember { mutableStateOf("home") }
                 var targetDate by remember { mutableStateOf(LocalDate.now()) }
@@ -107,7 +109,7 @@ class MainActivity : ComponentActivity() {
                             label = "screen_transition"
                         ) { screen ->
                             when (screen) {
-                                "home" -> HomeScreen(token = authUiState.token ?: "", onAddSchedule = { date -> targetDate = date; currentScreen = "add" }, onEditSchedule = { schedule -> editingSchedule = schedule; currentScreen = "detail" }, onGroupClick = { currentScreen = "group_list" }, onProfileClick = { currentScreen = "profile" }, onMoreClick = { currentScreen = "more" })
+                                "home" -> HomeScreen(token = authUiState.token ?: "", homeViewModel = homeViewModel, onAddSchedule = { date -> targetDate = date; currentScreen = "add" }, onEditSchedule = { schedule -> editingSchedule = schedule; currentScreen = "detail" }, onGroupClick = { currentScreen = "group_list" }, onProfileClick = { currentScreen = "profile" }, onMoreClick = { currentScreen = "more" })
                                 "add" -> { AddScheduleScreen(token = authUiState.token ?: "", initialDate = targetDate, onBack = navigateBack); BackHandler { navigateBack() } }
                                 "detail" -> { editingSchedule?.let { ScheduleDetailScreen(token = authUiState.token ?: "", schedule = it, onBack = navigateBack) }; BackHandler { navigateBack() } }
                                 "group_list" -> { GroupScreen(token = authUiState.token ?: "", viewModel = groupViewModel, onBack = navigateBack, onGroupClick = { selectedGroup = it; currentScreen = "group_detail" }, onCreateGroup = { currentScreen = "group_create" }, onJoinGroup = { currentScreen = "group_join" }); BackHandler { navigateBack() } }
@@ -117,7 +119,7 @@ class MainActivity : ComponentActivity() {
                                 "member_detail" -> { groupUiState.members.find { it.userId == selectedMemberId }?.let { MemberDetailScreen(member = it, groupId = selectedGroup?.groupId ?: "", isOwner = authUiState.user?.userId == selectedGroup?.ownerId, token = authUiState.token ?: "", viewModel = groupViewModel, onBack = navigateBack) }; BackHandler { navigateBack() } }
                                 "profile" -> { ProfileScreen(user = authUiState.user, onBack = navigateBack, onEditField = { f, v -> editingField = f; editingFieldValue = v; currentScreen = "edit_profile" }, onLogout = { authViewModel.logout(); currentScreen = "home" }); BackHandler { navigateBack() } }
                                 "edit_profile" -> { EditProfileFieldScreen(title = if (editingField == "nickname") "名字" else "信息", initialValue = editingFieldValue, onBack = navigateBack, onSave = { if (editingField == "nickname") authViewModel.updateNickname(it); navigateBack() }); BackHandler { navigateBack() } }
-                                "more" -> { MoreScreen(onBack = navigateBack); BackHandler { navigateBack() } }
+                                "more" -> { MoreScreen(token = authUiState.token ?: "", homeViewModel = homeViewModel, onBack = navigateBack); BackHandler { navigateBack() } }
                             }
                         }
                     }

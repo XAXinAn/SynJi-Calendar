@@ -14,7 +14,7 @@ class GroupRepository {
     private val client = OkHttpClient()
     private val gson = Gson()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    private val baseUrl = "http://192.168.43.227:8080"
+    private val baseUrl = "http://localhost:8080"
 
     suspend fun fetchGroups(token: String): ApiResponse<List<GroupInfo>> = withContext(Dispatchers.IO) {
         val request = Request.Builder()

@@ -100,11 +100,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _ocrResult = MutableStateFlow("")
     val ocrResult = _ocrResult.asStateFlow()
 
-    // 自动检测相关
-    private val _isAutoDetectionEnabled = MutableStateFlow(false)
-    val isAutoDetectionEnabled = _isAutoDetectionEnabled.asStateFlow()
-    private var autoDetectionJob: Job? = null
-
     private val calendarCache = mutableMapOf<YearMonth, List<DayDisplayInfo>>()
     private val _currentMonthData = MutableStateFlow<Map<YearMonth, List<DayDisplayInfo>>>(emptyMap())
     val currentMonthData = _currentMonthData.asStateFlow()
@@ -243,53 +238,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * 设置自动检测状态
-     */
-    fun setAutoDetectionEnabled(token: String, enabled: Boolean) {
-        _isAutoDetectionEnabled.value = enabled
-        if (enabled) {
-            autoDetectionJob?.cancel()
-            autoDetectionJob = viewModelScope.launch {
-                delay(5000)
-                val autoSchedule = Schedule(
-                    title = "岗前培训",
-                    date = LocalDate.of(2026, 2, 6),
-                    time = LocalTime.of(9, 30, 0),
-                    isAllDay = false,
-                    location = "门诊三楼志愿者之家",
-                    belonging = "个人",
-                    isImportant = false,
-                    notes = "",
-                    isAiGenerated = true,
-                    isViewed = false
-                )
-                _isLoading.value = true
-                _loadingMessage.value = "自动检测中..."
-                val response = repository.addSchedule(token, autoSchedule)
-                if (response.code == 200) {
-                    refreshSchedules(token)
-                    _message.emit("自动检测成功：岗前培训")
-                }
-                _isLoading.value = false
-                _isAutoDetectionEnabled.value = false // 执行完后自动关闭
-            }
-        } else {
-            autoDetectionJob?.cancel()
-        }
-    }
-
     fun performAutoScheduleFromImage(token: String, uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
             _loadingMessage.value = "正在识别并解析日程..."
             try {
-                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(getApplication<Application>().contentResolver, uri)) { decoder, _, _ ->
-                        decoder.isMutableRequired = true
-                    }
-                } else {
-                    MediaStore.Images.Media.getBitmap(getApplication<Application>().contentResolver, uri)
+                // Since minSdk is 31, we can directly use ImageDecoder
+                val source = ImageDecoder.createSource(getApplication<Application>().contentResolver, uri)
+                val bitmap = ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                    decoder.isMutableRequired = true
                 }
 
                 val extractedText = OcrEngine.recognize(bitmap)

@@ -1,9 +1,11 @@
 package com.example.synji_calendar.ui.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -75,7 +77,6 @@ fun ScheduleDetailScreen(
     var isSelectingBelonging by remember { mutableStateOf(false) }
     
     val isLoading by homeViewModel.isLoading.collectAsState()
-    val sheetState = rememberModalBottomSheetState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -216,17 +217,52 @@ fun ScheduleDetailScreen(
         AnimatedVisibility(visible = isSelectingBelonging, enter = slideInHorizontally(initialOffsetX = { it }), exit = slideOutHorizontally(targetOffsetX = { it })) {
             BelongingSelectionScreen(currentBelonging = selectedBelonging, onSelected = { selectedBelonging = it; isSelectingBelonging = false }, onBack = { isSelectingBelonging = false }, groupViewModel = groupViewModel)
         }
-    }
 
-    if (showDatePicker) {
-        ModalBottomSheet(onDismissRequest = { showDatePicker = false }, sheetState = sheetState, containerColor = Color.White, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp), dragHandle = null) {
-            WheelDatePickerContent(initialDate = selectedDate, onConfirm = { selectedDate = it; showDatePicker = false }, onCancel = { showDatePicker = false })
-        }
-    }
-
-    if (showTimePicker) {
-        ModalBottomSheet(onDismissRequest = { showTimePicker = false }, sheetState = sheetState, containerColor = Color.White, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp), dragHandle = null) {
-            WheelTimePickerContent(initialTime = selectedTime, onConfirm = { selectedTime = it; showTimePicker = false }, onCancel = { showTimePicker = false })
+        // --- Custom Animated Picker Overlay ---
+        val pickerVisible = showDatePicker || showTimePicker
+        AnimatedVisibility(
+            visible = pickerVisible,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(200))
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                // Background layer
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f))
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
+                )
+                // Content layer with combined animation
+                Surface(
+                    modifier = Modifier.fillMaxWidth().wrapContentHeight()
+                        .animateEnterExit(
+                            enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(400)),
+                            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(400))
+                        ),
+                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                    color = Color.White
+                ) {
+                    if (showDatePicker) {
+                        WheelDatePickerContent(
+                            initialDate = selectedDate,
+                            onConfirm = { selectedDate = it; showDatePicker = false },
+                            onCancel = { showDatePicker = false }
+                        )
+                    } else if (showTimePicker) {
+                        WheelTimePickerContent(
+                            initialTime = selectedTime,
+                            onConfirm = { selectedTime = it; showTimePicker = false },
+                            onCancel = { showTimePicker = false }
+                        )
+                    }
+                }
+            }
+            BackHandler { 
+                showDatePicker = false
+                showTimePicker = false
+            }
         }
     }
 }

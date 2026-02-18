@@ -14,12 +14,10 @@ import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
 import android.widget.Toast
 import com.example.synji_calendar.ui.home.HomeRepository
-import com.example.synji_calendar.ui.home.Schedule
 import com.example.synji_calendar.utils.OcrEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +44,7 @@ class ScreenCaptureActivity : Activity() {
         startActivityForResult(projectionManager?.createScreenCaptureIntent(), REQUEST_CODE_SCREEN_CAPTURE)
     }
 
+    @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQUEST_CODE_SCREEN_CAPTURE) {
             if (resultCode == RESULT_OK && data != null) {
@@ -59,12 +58,12 @@ class ScreenCaptureActivity : Activity() {
     }
 
     private fun captureScreen() {
-        val metrics = DisplayMetrics()
         val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        windowManager.defaultDisplay.getRealMetrics(metrics)
-        val screenWidth = metrics.widthPixels
-        val screenHeight = metrics.heightPixels
-        val screenDensity = metrics.densityDpi
+        val metrics = windowManager.currentWindowMetrics
+        val bounds = metrics.bounds
+        val screenWidth = bounds.width()
+        val screenHeight = bounds.height()
+        val screenDensity = resources.displayMetrics.densityDpi
 
         imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2)
         virtualDisplay = mediaProjection?.createVirtualDisplay(

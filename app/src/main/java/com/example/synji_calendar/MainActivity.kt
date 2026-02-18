@@ -1,5 +1,6 @@
 package com.example.synji_calendar
 
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -23,7 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -68,6 +71,18 @@ class MainActivity : ComponentActivity() {
                 var editingFieldValue by remember { mutableStateOf("") }
                 
                 val focusManager = LocalFocusManager.current
+                val context = LocalContext.current
+                
+                // 加载初始化背景图
+                val splashImage = remember {
+                    try {
+                        context.assets.open("init.png").use { inputStream ->
+                            BitmapFactory.decodeStream(inputStream)?.asImageBitmap()
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
 
                 val screenDepth = remember {
                     mapOf(
@@ -138,25 +153,24 @@ class MainActivity : ComponentActivity() {
                         exit = fadeOut(animationSpec = tween(500))
                     ) {
                         Box(
-                            modifier = Modifier.fillMaxSize().background(brush = Brush.verticalGradient(listOf(BgGradientStart, BgGradientEnd))),
+                            modifier = Modifier.fillMaxSize().background(Color.White),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                // 移除外部 Surface 容器，直接展示图标
+                            if (splashImage != null) {
                                 Image(
-                                    painter = painterResource(id = R.mipmap.ic_launcher),
-                                    contentDescription = "App Icon",
-                                    modifier = Modifier
-                                        .size(100.dp)
-                                        .clip(RoundedCornerShape(22.dp)), // 可选：如果图片本身不是圆角，这里可以修剪一下
-                                    contentScale = ContentScale.Fit
+                                    bitmap = splashImage,
+                                    contentDescription = "Splash Image",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop // 等比例缩放并裁剪以填充屏幕，不拉伸
                                 )
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text("讯极日历", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
-                                Text("SYN JI CALENDAR", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, fontWeight = FontWeight.Light)
-                                
-                                Spacer(modifier = Modifier.height(60.dp))
-                                CircularProgressIndicator(color = Color.White.copy(alpha = 0.5f), strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                            } else {
+                                // 备选方案：如果图片加载失败，显示原有的或简单的背景
+                                Box(
+                                    modifier = Modifier.fillMaxSize().background(brush = Brush.verticalGradient(listOf(BgGradientStart, BgGradientEnd))),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(color = Color.White.copy(alpha = 0.5f))
+                                }
                             }
                         }
                     }

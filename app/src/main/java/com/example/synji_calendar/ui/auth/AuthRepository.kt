@@ -1,6 +1,7 @@
 package com.example.synji_calendar.ui.auth
 
 import android.util.Log
+import com.example.synji_calendar.utils.NetworkConfig
 import com.google.gson.*
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +44,7 @@ class AuthRepository {
         .create()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    private val baseUrl = "http://localhost:8080"
+    private val baseUrl = NetworkConfig.BASE_URL
 
     suspend fun sendVerifyCode(phoneNumber: String): ApiResponse<String> = withContext(Dispatchers.IO) {
         val cleanPhone = phoneNumber.trim()

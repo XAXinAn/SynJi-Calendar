@@ -2,6 +2,7 @@ package com.example.synji_calendar.ui.home
 
 import android.util.Log
 import com.example.synji_calendar.ui.auth.ApiResponse
+import com.example.synji_calendar.utils.NetworkConfig
 import com.google.gson.*
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -64,7 +65,7 @@ class HomeRepository {
         .create()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    private val baseUrl = "http://localhost:8080"
+    private val baseUrl = NetworkConfig.BASE_URL
 
     suspend fun ping(): ApiResponse<String> = withContext(Dispatchers.IO) {
         val request = Request.Builder().url("$baseUrl/api/ping").get().build()

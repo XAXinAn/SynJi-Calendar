@@ -1,6 +1,7 @@
 package com.example.synji_calendar.ui.group
 
 import com.example.synji_calendar.ui.auth.ApiResponse
+import com.example.synji_calendar.utils.NetworkConfig
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -14,7 +15,7 @@ class GroupRepository {
     private val client = OkHttpClient()
     private val gson = Gson()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-    private val baseUrl = "http://localhost:8080"
+    private val baseUrl = NetworkConfig.BASE_URL
 
     suspend fun fetchGroups(token: String): ApiResponse<List<GroupInfo>> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
